@@ -24,3 +24,21 @@
 #include <string>
 #include <vector>
 #include <fstream>
+
+class ProfileHMM {
+public:
+
+  ProfileHMM() : a,b,c {}
+
+private:
+  vector<vector<double> >
+  transition();
+
+  vector<double>
+  emission();
+
+  vector<double>
+  initial_distribution;
+}
+
+#endif
