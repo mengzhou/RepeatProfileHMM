@@ -26,19 +26,34 @@
 #include <fstream>
 
 class ProfileHMM {
+  // profile-HMM allowing local alignment and re-occurrence of M_i;
+  // see Durbin book p.114
 public:
 
-  ProfileHMM() : a,b,c {}
+  double
+  ViterbiDecoding(const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<double> &initial,
+      const std::vector<std::vector<double> > &bg,
+      const size_t state, const size_t position,
+      const vector<size_t> &observation, vector<size_t> &path) const;
+
+  double
+  BaumWelchTraining() const;
+
+  double
+  PosteriorDecoding() const;
 
 private:
-  vector<vector<double> >
-  transition();
+  double
+  log_sum_log_vec(const std::vector<double> &vals, size_t limit) const;
 
-  vector<double>
-  emission();
+  double
+  log_sum_log(const double p, const double q) const;
 
-  vector<double>
-  initial_distribution;
-}
+  bool VERBOSE;
+  double tolerance;
+  size_t max_iterations;
+};
 
 #endif
