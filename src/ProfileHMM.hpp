@@ -33,7 +33,7 @@ public:
   double
   ViterbiDecoding(const std::vector<std::vector<double> > &transition,
       const std::vector<std::vector<double> > &emission,
-      const std::vector<double> &initial,
+      const std::vector<double> &initial, const std::vector<double> &ending,
       const std::vector<std::vector<double> > &bg,
       const size_t state, const size_t position,
       const vector<size_t> &observation, vector<size_t> &path) const;
@@ -51,9 +51,19 @@ private:
   double
   log_sum_log(const double p, const double q) const;
 
+  size_t
+  index_m(const size_t idx) const;
+
+  size_t
+  index_i(const size_t idx) const;
+
+  size_t
+  index_d(const size_t idx) const;
+
   bool VERBOSE;
   double tolerance;
   size_t max_iterations;
+  size_t model_len, seq_len;
 };
 
 #endif
