@@ -1,7 +1,7 @@
 /*    methcounts: a program for counting the methylated and
  *    unmethylated reads mapping over each CpG or C
  *
- *    Copyright (C) 2014 University of Southern California and
+ *    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
  *
  *    This program is free software: you can redistribute it and/or modify
@@ -21,28 +21,27 @@
 #ifndef PHMM_HPP
 #define PHMM_HPP
 
-#include <string>
-#include <vector>
-#include <fstream>
-
 class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114
 public:
 
   double
-  ViterbiDecoding(const std::vector<std::vector<double> > &transition,
+  ViterbiDecoding(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
       const std::vector<std::vector<double> > &emission,
       const std::vector<double> &initial, const std::vector<double> &ending,
       const std::vector<std::vector<double> > &bg,
       const size_t state, const size_t position,
       const vector<size_t> &observation, vector<size_t> &path) const;
 
+  /*
   double
   BaumWelchTraining() const;
 
   double
   PosteriorDecoding() const;
+  */
 
 private:
   double
@@ -61,8 +60,6 @@ private:
   index_d(const size_t idx) const;
 
   bool VERBOSE;
-  double tolerance;
-  size_t max_iterations;
   size_t model_len, seq_len;
 };
 
