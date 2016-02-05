@@ -39,7 +39,7 @@ ProfileHMM::log_sum_log(const double p, const double q) const {
 }
 
 double
-ProfileHMM::max_item(const std::initializer_list<double> list) {
+ProfileHMM::max_item(const std::initializer_list<double> list) const {
   const vector<double> v(list);
   const vector<double>::const_iterator x = 
      std::max_element(v.begin(), v.end());
@@ -80,20 +80,18 @@ ProfileHMM::index_d(const size_t idx) const {
 }
 
 double
-ProfileHMM::ViterbiDecoding(const bool VERBOSE,
-    const vector<vector<double> > &transition,
+ProfileHMM::ViterbiDecoding(const vector<vector<double> > &transition,
     const vector<vector<double> > &emission,
-    const vector<double> &initial, const vector<double> &ending,
-    const vector<vector<double> > &bg,
-    const size_t state, const size_t position,
-    const vector<size_t> &observation,
-    vector<pair<char, size_t> > &trace) {
+    const vector<double> &initial,
+    const vector<int> &observation,
+    vector<pair<char, size_t> > &trace) const {
 
   // use a very small value as -Inf
   const double LOG_ZERO = -1000.0;
-  vector<vector<double> > vm(model_len, vector<double>(seq_len, LOG_ZERO));
-  vector<vector<double> > vi(model_len, vector<double>(seq_len, LOG_ZERO));
-  vector<vector<double> > vd(model_len, vector<double>(seq_len, LOG_ZERO));
+  const size_t total_size = model_len * 3 + 2;
+  vector<vector<double> > vm(total_size, vector<double>(seq_len+1, LOG_ZERO));
+  vector<vector<double> > vi(total_size, vector<double>(seq_len+1, LOG_ZERO));
+  vector<vector<double> > vd(total_size, vector<double>(seq_len+1, LOG_ZERO));
 
   // Initialization for vm, vi, vd
   // vm[j][i]: prob of given state M_j and observing sequence X_i
@@ -131,48 +129,47 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
   // main loop
   for (size_t i = 1; i < seq_len; ++i) {
     // M_1 only has one incoming transition from D_1
-    vm[1][i] = vd[1][i-1] + transition[index_d(1)][index_m(j)]
-      + emission[index_m(1)][observation[i]];
+    vm[1][i] = vd[1][i-1] + transition[index_d(1)][index_m(1)]
+      + emission[index_m(1)][observation[i]]
+      - emission[index_i(1)][observation[i]];
     // I_1 only has two incoming transition including one from M_1
       ;
     vi[1][i] = max(
       {vm[1][i-1] + transition[index_m(1)][index_i(1)],
-      vi[1][i-1] + transition[index_i(1)][index_i(1)]})
-      + emission[index_i(1)][observation[i]]
-      - bg[observation[i]];
+      vi[1][i-1] + transition[index_i(1)][index_i(1)]});
     for (size_t j = 2; j < model_len - 1; ++j) {
       // M_i
       vm[j][i] = max(
-        {vm[j-1][i-1] + transition[index_m[j-1]][index_m(j)],
-        vi[j-1][i-1] + transition[index_i[j-1]][index_m(j)],
-        vd[j-1][i-1] + transition[index_d[j-1]][index_m(j)],
+        {vm[j-1][i-1] + transition[index_m(j-1)][index_m(j)],
+        vi[j-1][i-1] + transition[index_i(j-1)][index_m(j)],
+        vd[j-1][i-1] + transition[index_d(j-1)][index_m(j)],
         vd[1][i-1] + transition[index_d(1)][index_m(j)]})
         + emission[index_m(j)][observation[i]]
-        - bg[observation[i]];
+        - emission[index_i(1)][observation[i]];
       // I_i
       vi[j][i] = max(
         {vm[j][i-1] + transition[index_m(j)][index_i(j)],
         vi[j][i-1] + transition[index_i(j)][index_i(j)],
         vd[j][i-1] + transition[index_d(j)][index_i(j)]})
         + emission[index_i(j)][observation[i]]
-        - bg[observation[i]];
+        - emission[index_i(1)][observation[i]];
       // D_i
       vd[j][i] = max( 
-        {vm[j-1][i] + transition[index_m[j-1]][index_d(j)],
-        vi[j-1][i] + transition[index_i[j-1]][index_d(j)],
-        vd[j-1][i] + transition[index_d[j-1]][index_d(j)]});
+        {vm[j-1][i] + transition[index_m(j-1)][index_d(j)],
+        vi[j-1][i] + transition[index_i(j-1)][index_d(j)],
+        vd[j-1][i] + transition[index_d(j-1)][index_d(j)]});
     }
     // M_model_len
     vm[model_len][i] = max( 
       {vm[model_len-1][i-1]
-        + transition[index_m[model_len-1]][index_m[model_len]],
+        + transition[index_m(model_len-1)][index_m(model_len)],
       vi[model_len-1][i-1]
-        + transition[index_i[model_len-1]][index_m[model_len]],
+        + transition[index_i(model_len-1)][index_m(model_len)],
       vd[model_len-1][i-1]
-        + transition[index_d[model_len-1]][index_m[model_len]],
-      vd[1][i-1] + transition[index_d(1)][index_m(L)]})
-      + emission[index_m[model_len]][observation[i]]
-      - bg[observation[i]];
+        + transition[index_d(model_len-1)][index_m(model_len)],
+      vd[1][i-1] + transition[index_d(1)][index_m(model_len)]})
+      + emission[index_m(model_len)][observation[i]]
+      - emission[index_i(1)][observation[i]];
     // I_model_len does not exist
     // D_model_len
     vector<double> list;
@@ -182,17 +179,18 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
     const vector<double>::const_iterator x = 
       std::max_element(list.begin(), list.end());
     size_t max_idx = x - list.begin();
-    vd[model_len][i] = *x + transition[index_m[max_idx+1]][index_d[model_len]];
+    vd[model_len][i] = *x + transition[index_m(max_idx+1)][index_d(model_len)];
     // I_0
     vi[0][i] = max( 
       {vi[1][i-1] + transition[index_i(1)][index_i(1)],
-      vd[model_len][i] + transition[index_d[model_len]][index_i(1)]});
+      vd[model_len][i] + transition[index_d(model_len)][index_i(1)]});
     // D_1
     vd[1][i] = vi[0][i] + transition[index_i(0)][index_d(1)];
   }
 
   //traceback
-  trace.push_back('E', 0);
+  std::pair<char, int> step('E', 0);
+  trace.push_back(step);
   size_t state_idx;
   char state;
   if (vd[model_len][seq_len] > vi[0][seq_len]) {
@@ -206,11 +204,14 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
 
   size_t seq_idx = seq_len;
   while (!(state == 'M' && state_idx == 0) && seq_idx > 0) {
-    trace.push_back(state, state_idx);
+    std::pair<char, int> step(state, state_idx);
+    trace.push_back(step);
+    if (VERBOSE)
+      std::cerr << state << state_idx << ", " << seq_idx << std::endl;
     switch (state) {
-      case 'M':
+      case 'M': {
         // assuming state_idx = 1~L
-        max_idx = max_item({vm[state_idx-1][seq_idx-1],
+        size_t max_idx = max_item({vm[state_idx-1][seq_idx-1],
           vi[state_idx-1][seq_idx-1],
           vd[state_idx-1][seq_idx-1],
           vd[1][seq_idx-1]});
@@ -226,11 +227,13 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
         }
         --state_idx;
         --seq_idx;
-      case 'I':
+        break;
+      }
+      case 'I': {
         if (state_idx == 0) {
-          max_idx = max_item({vm[0][seq_idx-1],
-            vi[0][seq_idx-1]},
-            vd[model_len][seq_idx-1]);
+          size_t max_idx = max_item({vm[0][seq_idx-1],
+            vi[0][seq_idx-1],
+            vd[model_len][seq_idx-1]});
           switch (max_idx) {
             case 0:
               state = 'M';
@@ -243,9 +246,9 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
           }
         }
         else {
-          max_idx = max_item({vm[state_idx][seq_idx-1],
-            vi[state_idx][seq_idx-1]},
-            vd[model_len][state_idx-1]);
+          size_t max_idx = max_item({vm[state_idx][seq_idx-1],
+            vi[state_idx][seq_idx-1],
+            vd[model_len][state_idx-1]});
           switch (max_idx) {
             case 0:
               state = 'M';
@@ -256,7 +259,9 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
           }
         --seq_idx;
         }
-      case 'D':
+        break;
+      }
+      case 'D': {
         if (state_idx == model_len) {
           vector<double> list;
           for (size_t k = 1; k < model_len; ++k) {
@@ -267,7 +272,7 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
           state_idx = x - list.begin();
         }
         else if (state_idx == 1) {
-          max_idx = max_item({vm[0][seq_idx],
+          size_t max_idx = max_item({vm[0][seq_idx],
             vi[0][seq_idx]});
           switch (max_idx) {
             case 0:
@@ -278,7 +283,7 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
           state_idx = 0;
         }
         else {
-          max_idx = max_item({vm[state_idx-1][seq_idx],
+          size_t max_idx = max_item({vm[state_idx-1][seq_idx],
             vi[state_idx-1][seq_idx],
             vd[state_idx-1][seq_idx]});
           switch (max_idx) {
@@ -291,11 +296,14 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
           }
           --state_idx;
         }
+      }
     }
   }
-  trace.push_back('M', 0);
+  step = std::make_pair ('M', 0);
+  trace.push_back(step);
   reverse(trace.begin(), trace.end());
 
-  return max(vd[model_len][seq_len] + ending[index_d[model_len]],
-      vi[0][seq_len] + ending[index_i(0)];
+  return max(vd[model_len][seq_len]
+      + transition[index_d(model_len)][total_size-1],
+      vi[0][seq_len] + transition[index_i(0)][total_size-1]);
 }

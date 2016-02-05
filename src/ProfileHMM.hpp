@@ -21,19 +21,23 @@
 #ifndef PHMM_HPP
 #define PHMM_HPP
 
+#include <initializer_list>
+#include "smithlab_utils.hpp"
+
 class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
-  // see Durbin book p.114
+  // see Durbin book p.114 (bottom figure)
 public:
+  ProfileHMM (const bool v, const size_t model_len,
+      const size_t seq_len) : VERBOSE(v), model_len(model_len),
+      seq_len(seq_len) {}
 
   double
-  ViterbiDecoding(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
+  ViterbiDecoding(const std::vector<std::vector<double> > &transition,
       const std::vector<std::vector<double> > &emission,
-      const std::vector<double> &initial, const std::vector<double> &ending,
-      const std::vector<std::vector<double> > &bg,
-      const size_t state, const size_t position,
-      const vector<size_t> &observation, vector<size_t> &path) const;
+      const std::vector<double> &initial,
+      const std::vector<int> &observation,
+      std::vector<std::pair<char, size_t> > &trace) const;
 
   /*
   double
@@ -49,6 +53,9 @@ private:
 
   double
   log_sum_log(const double p, const double q) const;
+
+  double
+  max_item(const std::initializer_list<double> list) const;
 
   size_t
   index_m(const size_t idx) const;

@@ -1,0 +1,21 @@
+# no .svn direcrories
+.svn/
+bin/
+
+# no compiled object file
+*.[oa]
+*.so
+*.pyc
+
+# no temporary file
+*~
+*.out
+*.aux
+*.log
+*.eps
+*.tif
+*.dvi
+*.swp
+
+# no binaries
+test
