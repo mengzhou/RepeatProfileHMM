@@ -88,11 +88,11 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
       // next D
       transition[x][index_d(model_len, x+1)] = log(0.1);
       // next M
-      transition[x][x+1] = log(0.78);
+      transition[x][x+1] = log(0.6);
       // I
       transition[x][index_i(model_len, x)] = log(0.1);
       // D_L
-      transition[x][index_d(model_len, model_len)] = log(0.02);
+      transition[x][index_d(model_len, model_len)] = log(0.2);
       // I_1 ~ I_L-2
       // self
       transition[index_i(model_len, x)][index_i(model_len, x)] = log(0.3);
@@ -104,11 +104,11 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
     else {
       // M_L-1
       // next M
-      transition[x][x+1] = log(0.78);
+      transition[x][x+1] = log(0.7);
       // I
       transition[x][index_i(model_len, x)] = log(0.1);
       // D_L
-      transition[x][index_d(model_len, model_len)] = log(0.12);
+      transition[x][index_d(model_len, model_len)] = log(0.2);
       // I_L-1
       // self
       transition[index_i(model_len, x)][index_i(model_len, x)] = log(0.35);
@@ -135,10 +135,10 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
   }
 
   // B
-  transition[0][index_d(model_len, 1)] = log(0.2);
-  transition[0][index_i(model_len, 0)] = log(0.8);
+  transition[0][index_d(model_len, 1)] = log(0.4);
+  transition[0][index_i(model_len, 0)] = log(0.6);
   // D_1
-  double first_base_weight = 0.3;
+  double first_base_weight = 0.5;
   transition[index_d(model_len, 1)][1] = log(first_base_weight);
   for (size_t x = 2; x <= model_len; ++x) {
     transition[index_d(model_len, 1)][x] =
@@ -147,17 +147,17 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
 
   // I_0
   // D_1
-  transition[index_i(model_len, 0)][index_d(model_len, 1)] = log(0.25);
+  transition[index_i(model_len, 0)][index_d(model_len, 1)] = log(0.4);
   // self
-  transition[index_i(model_len, 0)][index_i(model_len, 0)] = log(0.6);
+  transition[index_i(model_len, 0)][index_i(model_len, 0)] = log(0.4);
   // end
-  transition[index_i(model_len, 0)][total_size - 1] = log(0.15);
+  transition[index_i(model_len, 0)][total_size - 1] = log(0.2);
 
   // D_L
   // I_0
-  transition[index_d(model_len, model_len)][index_i(model_len, 0)] = log(0.7);
+  transition[index_d(model_len, model_len)][index_i(model_len, 0)] = log(0.6);
   // end
-  transition[index_d(model_len, model_len)][total_size - 1] = log(0.3);
+  transition[index_d(model_len, model_len)][total_size - 1] = log(0.4);
 
   // M_L
   transition[model_len][index_d(model_len, model_len)] = 0.0;
@@ -191,35 +191,42 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
     }
   }
   // bg A, C, G, T
-  double insert[4] = {0.40, 0.05, 0.05, 0.50};
-  double match[4] = {0.10, 0.45, 0.35, 0.10};
+  double insert[4] = {0.49, 0.01, 0.01, 0.49};
+  double match[4] = {0.10, 0.70, 0.10, 0.10};
   emission[index_i(model_len, 0)][0] = log(insert[0]);
   emission[index_i(model_len, 0)][1] = log(insert[1]);
   emission[index_i(model_len, 0)][2] = log(insert[2]);
   emission[index_i(model_len, 0)][3] = log(insert[3]);
   
+  const bool RANDOMIZE = true;
   for (size_t x = 1; x <= model_len; ++x) {
     double prob[4];
-    gsl_ran_dirichlet(rng, 4, match, prob);
-    //emission[x][0] = log(prob[0]);
-    //emission[x][1] = log(prob[1]);
-    //emission[x][2] = log(prob[2]);
-    //emission[x][3] = log(prob[3]);
-    emission[x][0] = log(match[0]);
-    emission[x][1] = log(match[1]);
-    emission[x][2] = log(match[2]);
-    emission[x][3] = log(match[3]);
+    if (RANDOMIZE) {
+      gsl_ran_dirichlet(rng, 4, match, prob);
+      emission[x][0] = log(prob[0]);
+      emission[x][1] = log(prob[1]);
+      emission[x][2] = log(prob[2]);
+      emission[x][3] = log(prob[3]);
+    } else {
+      emission[x][0] = log(match[0]);
+      emission[x][1] = log(match[1]);
+      emission[x][2] = log(match[2]);
+      emission[x][3] = log(match[3]);
+    }
 
     if (x < model_len) {
-      gsl_ran_dirichlet(rng, 4, insert, prob);
-      //emission[index_i(model_len, x)][0] = log(prob[0]);
-      //emission[index_i(model_len, x)][1] = log(prob[1]);
-      //emission[index_i(model_len, x)][2] = log(prob[2]);
-      //emission[index_i(model_len, x)][3] = log(prob[3]);
-      emission[index_i(model_len, x)][0] = log(insert[0]);
-      emission[index_i(model_len, x)][1] = log(insert[1]);
-      emission[index_i(model_len, x)][2] = log(insert[2]);
-      emission[index_i(model_len, x)][3] = log(insert[3]);
+      if (RANDOMIZE) {
+        gsl_ran_dirichlet(rng, 4, insert, prob);
+        emission[index_i(model_len, x)][0] = log(prob[0]);
+        emission[index_i(model_len, x)][1] = log(prob[1]);
+        emission[index_i(model_len, x)][2] = log(prob[2]);
+        emission[index_i(model_len, x)][3] = log(prob[3]);
+      } else {
+        emission[index_i(model_len, x)][0] = log(insert[0]);
+        emission[index_i(model_len, x)][1] = log(insert[1]);
+        emission[index_i(model_len, x)][2] = log(insert[2]);
+        emission[index_i(model_len, x)][3] = log(insert[3]);
+      }
     }
   }
 
