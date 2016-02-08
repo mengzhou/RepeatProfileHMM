@@ -28,9 +28,9 @@ class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114 (bottom figure)
 public:
-  ProfileHMM (const bool v, const size_t model_len,
-      const size_t seq_len) : VERBOSE(v), model_len(model_len),
-      seq_len(seq_len) {}
+  ProfileHMM (const bool v, const size_t ml, const size_t sl) :
+    VERBOSE(v), model_len(ml),
+    seq_len(sl) {}
 
   double
   ViterbiDecoding(const std::vector<std::vector<double> > &transition,
