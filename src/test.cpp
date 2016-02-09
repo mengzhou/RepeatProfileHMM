@@ -51,16 +51,14 @@ index_d(const size_t model_len, const size_t idx) {
 
 void seq_to_int(const string &seq, vector<int> &observation) {
   for (string::const_iterator i = seq.begin(); i < seq.end(); ++i) {
-    switch (*i) {
-      case 'A':
-        observation.push_back(0);
-      case 'C':
-        observation.push_back(1);
-      case 'G':
-        observation.push_back(2);
-      case 'T':
-        observation.push_back(3);
-    }
+    if (*i == 'A')
+      observation.push_back(0);
+    else if (*i == 'C')
+      observation.push_back(1);
+    else if (*i == 'G')
+      observation.push_back(2);
+    else if (*i == 'T')
+      observation.push_back(3);
   }
 }
 
@@ -280,7 +278,7 @@ int main (int argc, const char **argv) {
   vector<int> observation;
   vector<pair<char, size_t> > trace;
   seq_to_int(input, observation);
-  ProfileHMM hmm(VERBOSE, model_len, input.size());
+  ProfileHMM hmm(VERBOSE, model_len);
   const double lh = 
   hmm.ViterbiDecoding(transition, emission, initial, observation, trace);
 
@@ -290,4 +288,9 @@ int main (int argc, const char **argv) {
     cout << (*i).first << (*i).second << " ";
   }
   cout << endl;
+
+  hmm.forward_algorithm(transition, emission, initial, observation);
+  cout << "P1=" << exp(hmm.forward_prob('M', 2, 4)) << endl;
+  cout << "P2=" << exp(hmm.forward_prob('I', 1, 3)) << endl;
+  cout << "P3=" << exp(hmm.forward_prob('D', 2, 2)) << endl;
 }

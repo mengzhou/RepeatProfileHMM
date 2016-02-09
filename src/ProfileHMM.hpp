@@ -28,9 +28,7 @@ class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114 (bottom figure)
 public:
-  ProfileHMM (const bool v, const size_t ml, const size_t sl) :
-    VERBOSE(v), model_len(ml),
-    seq_len(sl) {}
+  ProfileHMM(const bool v, const size_t ml) : VERBOSE(v), model_len(ml) {}
 
   double
   ViterbiDecoding(const std::vector<std::vector<double> > &transition,
@@ -39,15 +37,19 @@ public:
       const std::vector<int> &observation,
       std::vector<std::pair<char, size_t> > &trace) const;
 
-  /*
-  double
-  BaumWelchTraining() const;
+  void
+  forward_algorithm(const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<double> &initial,
+      const std::vector<int> &observation);
 
   double
-  PosteriorDecoding() const;
-  */
+  forward_prob(const char state, const size_t state_idx, const size_t obs_pos);
 
 private:
+  double
+  log_sum_log_list(const std::initializer_list<double> list) const;
+
   double
   log_sum_log_vec(const std::vector<double> &vals, size_t limit) const;
 
@@ -67,7 +69,11 @@ private:
   index_d(const size_t idx) const;
 
   bool VERBOSE;
-  size_t model_len, seq_len;
+  size_t model_len;
+  // use a very small value as -Inf
+  const double LOG_ZERO = -1000.0;
+  const size_t total_size = model_len * 3 + 2;
+  std::vector<std::vector<double> > fm, fi, fd;
 };
 
 #endif
