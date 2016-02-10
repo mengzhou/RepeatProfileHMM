@@ -189,8 +189,8 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
     }
   }
   // bg A, C, G, T
-  double insert[4] = {0.49, 0.01, 0.01, 0.49};
-  double match[4] = {0.10, 0.70, 0.10, 0.10};
+  double insert[4] = {0.40, 0.10, 0.10, 0.40};
+  double match[4] = {0.05, 0.40, 0.50, 0.05};
   emission[index_i(model_len, 0)][0] = log(insert[0]);
   emission[index_i(model_len, 0)][1] = log(insert[1]);
   emission[index_i(model_len, 0)][2] = log(insert[2]);
@@ -278,9 +278,9 @@ int main (int argc, const char **argv) {
   vector<int> observation;
   vector<pair<char, size_t> > trace;
   seq_to_int(input, observation);
-  ProfileHMM hmm(VERBOSE, model_len);
+  ProfileHMM hmm(model_len);
   const double lh = 
-  hmm.ViterbiDecoding(transition, emission, initial, observation, trace);
+  hmm.ViterbiDecoding(VERBOSE, transition, emission, initial, observation, trace);
 
   cout << endl << "Result: " << lh << endl;
   for (vector<pair<char, size_t> >::const_iterator i = trace.begin();
@@ -289,8 +289,11 @@ int main (int argc, const char **argv) {
   }
   cout << endl;
 
-  hmm.forward_algorithm(transition, emission, initial, observation);
-  cout << "P1=" << exp(hmm.forward_prob('M', 2, 4)) << endl;
-  cout << "P2=" << exp(hmm.forward_prob('I', 1, 3)) << endl;
-  cout << "P3=" << exp(hmm.forward_prob('D', 2, 2)) << endl;
+  hmm.forward_algorithm(VERBOSE, transition, emission, initial, observation);
+  //cout << "P1=" << exp(hmm.forward_prob('M', 2, 4)) << endl;
+  //cout << "P2=" << exp(hmm.forward_prob('I', 1, 3)) << endl;
+  //cout << "P3=" << exp(hmm.forward_prob('D', 2, 2)) << endl;
+  cout << "P=" << exp(hmm.forward_prob('E', 2, 2)) << endl;
+  hmm.backward_algorithm(VERBOSE, transition, emission, initial, observation);
+  //cout << "P1=" << exp(hmm.backward_prob('M', 2, 2)) << endl;
 }

@@ -28,23 +28,35 @@ class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114 (bottom figure)
 public:
-  ProfileHMM(const bool v, const size_t ml) : VERBOSE(v), model_len(ml) {}
+  ProfileHMM(const size_t ml) : model_len(ml) {}
 
   double
-  ViterbiDecoding(const std::vector<std::vector<double> > &transition,
+  ViterbiDecoding(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
       const std::vector<std::vector<double> > &emission,
       const std::vector<double> &initial,
       const std::vector<int> &observation,
       std::vector<std::pair<char, size_t> > &trace) const;
 
   void
-  forward_algorithm(const std::vector<std::vector<double> > &transition,
+  forward_algorithm(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
       const std::vector<std::vector<double> > &emission,
       const std::vector<double> &initial,
       const std::vector<int> &observation);
 
   double
   forward_prob(const char state, const size_t state_idx, const size_t obs_pos);
+
+  void
+  backward_algorithm(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<double> &initial,
+      const std::vector<int> &observation);
+
+  double
+  backward_prob(const char state, const size_t state_idx, const size_t obs_pos);
 
 private:
   double
@@ -68,12 +80,12 @@ private:
   size_t
   index_d(const size_t idx) const;
 
-  bool VERBOSE;
   size_t model_len;
   // use a very small value as -Inf
   const double LOG_ZERO = -1000.0;
   const size_t total_size = model_len * 3 + 2;
   std::vector<std::vector<double> > fm, fi, fd;
+  std::vector<std::vector<double> > bm, bi, bd;
 };
 
 #endif
