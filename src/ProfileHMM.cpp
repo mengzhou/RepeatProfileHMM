@@ -21,7 +21,6 @@
 #include "ProfileHMM.hpp"
 
 #include <cmath>
-#include <initializer_list>
 #include <algorithm>
 #include <vector>
 #include <iostream>
@@ -105,7 +104,6 @@ double
 ProfileHMM::ViterbiDecoding(const bool VERBOSE,
     const vector<vector<double> > &transition,
     const vector<vector<double> > &emission,
-    const vector<double> &initial,
     const vector<int> &observation,
     vector<pair<char, size_t> > &trace) const {
   const size_t seq_len = observation.size();
@@ -226,7 +224,7 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
   }
 
   //traceback
-  std::pair<char, int> step('E', 0);
+  std::pair<char, size_t> step('E', 0);
   trace.push_back(step);
   size_t state_idx;
   char state;
@@ -242,7 +240,7 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
   }
 
   while (!(state == 'M' && state_idx == 0) && seq_idx <= seq_len) {
-    std::pair<char, int> step(state, state_idx);
+    std::pair<char, size_t> step(state, state_idx);
     trace.push_back(step);
     if (VERBOSE)
       cout << state << state_idx << ", " << seq_idx << endl;
@@ -376,7 +374,6 @@ void
 ProfileHMM::forward_algorithm(const bool VERBOSE,
     const vector<vector<double> > &transition,
     const vector<vector<double> > &emission,
-    const vector<double> &initial,
     const vector<int> &observation) {
   const size_t seq_len = observation.size();
   // Note here: fm[i][j] corresponds to M_i on o_j, where i=0~L
@@ -498,7 +495,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
 
 double
 ProfileHMM::forward_prob(const char state, const size_t state_idx,
-    const size_t obs_pos) {
+    const size_t obs_pos) const {
   if (state == 'M')
     return fm[state_idx][obs_pos];
   else if (state == 'I')
@@ -516,22 +513,21 @@ void
 ProfileHMM::backward_algorithm(const bool VERBOSE,
     const vector<vector<double> > &transition,
     const vector<vector<double> > &emission,
-    const vector<double> &initial,
     const vector<int> &observation) {
   const size_t seq_len = observation.size();
-  bm.resize(model_len+1, vector<double>(seq_len, LOG_ZERO));
-  bi.resize(model_len, vector<double>(seq_len, LOG_ZERO));
-  bd.resize(model_len, vector<double>(seq_len, LOG_ZERO));
+  bm.resize(model_len+1, vector<double>(seq_len+1, LOG_ZERO));
+  bi.resize(model_len, vector<double>(seq_len+1, LOG_ZERO));
+  bd.resize(model_len, vector<double>(seq_len+1, LOG_ZERO));
 
   // Initialization
   for (size_t i = 0; i < bm.size(); ++i)
-    bm[i][seq_len-1] = 0.0;
+    bm[i][seq_len] = 0.0;
   for (size_t i = 0; i < bi.size(); ++i)
-    bi[i][seq_len-1] = 0.0;
+    bi[i][seq_len] = 0.0;
   for (size_t i = 0; i < bd.size(); ++i)
-    bd[i][seq_len-1] = 0.0;
+    bd[i][seq_len] = 0.0;
 
-  for (signed long i = seq_len - 2; i >= 0; --i) {
+  for (signed long i = seq_len - 1; i >= 0; --i) {
     // D_L
     bd[model_len-1][i] = 
       bi[0][i+1] + transition[index_d(model_len)][index_i(0)];
@@ -637,34 +633,34 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
 
   if (VERBOSE) {
     cout << "B_M" << endl;
-    for (size_t j = 0; j < seq_len; ++j)
-      cout << "\t" << j+1;
+    for (size_t j = 0; j < seq_len+1; ++j)
+      cout << "\t" << j;
     cout << endl;
     for (vector<vector<double> >::const_iterator i = bm.begin(); i < bm.end(); ++i) {
       cout << i - bm.begin();
-      for (size_t j = 0; j < seq_len; ++j)
+      for (size_t j = 0; j < seq_len+1; ++j)
         printf("\t%.4f", exp((*i)[j]));
         //printf("\t%.4f", (*i)[j]);
       cout << endl;
     }
     cout << endl << "B_I" << endl;
-    for (size_t j = 0; j < seq_len; ++j)
-      cout << "\t" << j+1;
+    for (size_t j = 0; j < seq_len+1; ++j)
+      cout << "\t" << j;
     cout << endl;
     for (vector<vector<double> >::const_iterator i = bi.begin(); i < bi.end(); ++i) {
       cout << i - bi.begin();
-      for (size_t j = 0; j < seq_len; ++j)
+      for (size_t j = 0; j < seq_len+1; ++j)
         printf("\t%.4f", exp((*i)[j]));
         //printf("\t%.4f", (*i)[j]);
       cout << endl;
     }
     cout << endl << "B_D" << endl;
-    for (size_t j = 0; j < seq_len; ++j)
-      cout << "\t" << j+1;
+    for (size_t j = 0; j < seq_len+1; ++j)
+      cout << "\t" << j;
     cout << endl;
     for (vector<vector<double> >::const_iterator i = bd.begin(); i < bd.end(); ++i) {
       cout << i - bd.begin() + 1;
-      for (size_t j = 0; j < seq_len; ++j)
+      for (size_t j = 0; j < seq_len+1; ++j)
         printf("\t%.4f", exp((*i)[j]));
         //printf("\t%.4f", (*i)[j]);
       cout << endl;
@@ -674,7 +670,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
 
 double
 ProfileHMM::backward_prob(const char state, const size_t state_idx,
-    const size_t obs_pos) {
+    const size_t obs_pos) const {
   if (state == 'M')
     return bm[state_idx][obs_pos];
   else if (state == 'I')
@@ -683,4 +679,439 @@ ProfileHMM::backward_prob(const char state, const size_t state_idx,
     return bd[state_idx-1][obs_pos];
   else
     return -1;
+}
+
+void
+ProfileHMM::BW_training(const bool VERBOSE,
+    vector<vector<double> > &transition,
+    vector<vector<double> > &emission,
+    const vector<int> &observation) {
+
+  const size_t seq_len = observation.size();
+  double ll_new = 1e10;
+  double ll = forward_prob('E', 1, 1);
+  vector<vector<double> > e_trans(total_size,
+      vector<double>(total_size, LOG_ZERO));
+  vector<vector<double> > e_emiss(total_size,
+      vector<double>(emission[0].size(), LOG_ZERO));
+  for (size_t itr = 0; ll_new - ll > tolerance && itr < max_iterations;
+      ++itr) {
+    // get expectations
+    // Transitions
+    // M_0 to D_1 and I_0
+    e_trans[index_m(0)][index_d(1)] = 
+        fm[0][0] + transition[index_m(0)][index_d(1)]
+        + bd[0][0] - ll;
+    e_trans[index_m(0)][index_i(0)] = 
+        fm[0][0] + transition[index_m(0)][index_i(0)]
+        + bi[0][0] - ll;
+    // I_0 to D_1, I_0, and E
+    vector<double> list;
+    for (size_t i = 1; i < seq_len; ++i) {
+      list.push_back(fi[0][i] + transition[index_i(0)][index_d(1)]
+        + bd[0][i]);
+    }
+    e_trans[index_i(0)][index_d(1)] = log_sum_log_vec(list, list.size())
+      - ll;
+    list.clear();
+    for (size_t i = 1; i < seq_len; ++i) {
+      // still use log-odds ratio here (no emission)?
+      list.push_back(fi[0][i] + transition[index_i(0)][index_i(0)]
+        + bi[0][i+1]);
+    }
+    e_trans[index_i(0)][index_i(0)] = log_sum_log_vec(list, list.size())
+      - ll;
+    list.clear();
+    e_trans[index_i(0)][total_size-1] =
+      fi[0][seq_len] + transition[index_i(0)][total_size-1] - ll;
+    // D_1 to M_i
+    for (size_t j = 1; j <= model_len; ++j) {
+      for (size_t i = 0; i < seq_len; ++i) {
+        list.push_back(fd[0][i] + transition[index_d(1)][index_m(j)]
+          + emission[index_m(j)][observation[i]]
+          - emission[index_i(0)][observation[i]]
+          + bm[j][i+1]);
+      }
+      e_trans[index_d(1)][index_m(j)] = log_sum_log_vec(list, list.size()) - ll;
+      list.clear();
+    }
+    // D_L to I_0 and E
+    for (size_t i = 0; i < seq_len; ++i) {
+      list.push_back(fd[model_len-1][i]
+        + transition[index_d(model_len)][index_i(0)]
+        + bi[0][i+1]);
+    }
+    e_trans[index_d(model_len)][index_i(0)] =
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    e_trans[index_d(model_len)][total_size-1] =
+      fd[model_len-1][seq_len] + transition[index_d(model_len)][total_size-1]
+      - ll;
+    // D_L-1 to M_L and I_L-1
+    for (size_t i = 0; i < seq_len; ++i) {
+      list.push_back(fd[model_len-2][i]
+        + transition[index_d(model_len-1)][index_m(model_len)]
+        + emission[index_m(model_len)][observation[i]]
+        - emission[index_i(0)][observation[i]]
+        + bm[model_len][i+1]);
+    }
+    e_trans[index_d(model_len-1)][index_m(model_len)] =
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    for (size_t i = 0; i < seq_len; ++i) {
+      list.push_back(fd[model_len-2][i]
+        + transition[index_d(model_len-1)][index_i(model_len-1)]
+        + emission[index_i(model_len-1)][observation[i]]
+        - emission[index_i(0)][observation[i]]
+        + bi[model_len-1][i+1]);
+    }
+    e_trans[index_d(model_len-1)][index_i(model_len-1)] =
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    // I_L-1 to I_L-1 and M_L-1
+    for (size_t i = 1; i < seq_len; ++i) {
+      list.push_back(fi[model_len-1][i]
+        + transition[index_i(model_len-1)][index_i(model_len-1)]
+        + emission[index_i(model_len-1)][observation[i]]
+        - emission[index_i(0)][observation[i]]
+        + bi[model_len-1][i+1]);
+    }
+    e_trans[index_i(model_len-1)][index_i(model_len-1)] = 
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    for (size_t i = 1; i < seq_len; ++i) {
+      list.push_back(fi[model_len-1][i]
+        + transition[index_i(model_len-1)][index_m(model_len)]
+        + emission[index_m(model_len)][observation[i]]
+        - emission[index_i(0)][observation[i]]
+        + bm[model_len][i+1]);
+    }
+    e_trans[index_i(model_len-1)][index_m(model_len)] =
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    // M_L-1 to I_L-1, M_L and D_L
+    for (size_t i = 1; i < seq_len; ++i) {
+      list.push_back(fm[model_len-1][i]
+        + transition[index_m(model_len-1)][index_i(model_len-1)]
+        + emission[index_i(model_len-1)][observation[i]]
+        - emission[index_i(0)][observation[i]]
+        + bi[model_len-1][i+1]);
+    }
+    e_trans[index_m(model_len-1)][index_i(model_len-1)] = 
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    for (size_t i = 1; i < seq_len; ++i) {
+      list.push_back(fm[model_len-1][i]
+        + transition[index_m(model_len-1)][index_m(model_len)]
+        + emission[index_m(model_len)][observation[i]]
+        - emission[index_i(0)][observation[i]]
+        + bm[model_len][i+1]);
+    }
+    e_trans[index_m(model_len-1)][index_m(model_len)] = 
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    for (size_t i = 1; i <= seq_len; ++i) {
+      list.push_back(fm[model_len-1][i]
+        + transition[index_m(model_len-1)][index_d(model_len)]
+        + bd[model_len-1][i]);
+    }
+    e_trans[index_m(model_len-1)][index_d(model_len)] = 
+      log_sum_log_vec(list, list.size()) - ll;
+    list.clear();
+    // M_L to D_L is always 1, so no need to learn
+    // general
+    for (size_t j = 1; j < model_len - 1; ++j) {
+      // I_1~L-2: to I_j, M_j+1, and D_j+1
+      vector <double> list_m, list_i, list_d, list_l;
+      for (size_t i = 1; i < seq_len; ++i) {
+        list_i.push_back(fi[j][i]
+          + transition[index_i(j)][index_i(j)]
+          + emission[index_i(j)][observation[i]]
+          - emission[index_i(0)][observation[i]]
+          + bi[j][i+1]);
+        list_m.push_back(fi[j][i]
+          + transition[index_i(j)][index_m(j+1)]
+          + emission[index_m(j+1)][observation[i]]
+          - emission[index_i(0)][observation[i]]
+          + bm[j+1][i+1]);
+        list_d.push_back(fi[j][i]
+          + transition[index_i(j)][index_d(j+1)]
+          + bd[j][i]);
+      }
+      e_trans[index_i(j)][index_i(j)] =
+        log_sum_log_vec(list_i, list_i.size()) - ll;
+      e_trans[index_i(j)][index_m(j+1)] =
+        log_sum_log_vec(list_m, list_m.size()) - ll;
+      e_trans[index_i(j)][index_d(j+1)] =
+        log_sum_log_vec(list_d, list_d.size()) - ll;
+      list_i.clear();
+      list_m.clear();
+      list_d.clear();
+      // M_1~L-2: to M_j+1, I_j, D_j+1 and D_L
+      for (size_t i = 1; i < seq_len; ++i) {
+        list_i.push_back(fm[j][i]
+          + transition[index_m(j)][index_i(j)]
+          + emission[index_i(j)][observation[i]]
+          - emission[index_i(0)][observation[i]]
+          + bi[j][i+1]);
+        list_m.push_back(fm[j][i]
+          + transition[index_m(j)][index_m(j+1)]
+          + emission[index_m(j+1)][observation[i]]
+          - emission[index_i(0)][observation[i]]
+          + bm[j+1][i+1]);
+        list_d.push_back(fm[j][i]
+          + transition[index_m(j)][index_d(j+1)]
+          + bd[j][i]);
+        list_l.push_back(fm[j][i]
+          + transition[index_m(j)][index_d(model_len)]
+          + bd[model_len-1][i]);
+      }
+      e_trans[index_m(j)][index_i(j)] =
+        log_sum_log_vec(list_i, list_i.size()) - ll;
+      e_trans[index_m(j)][index_m(j+1)] =
+        log_sum_log_vec(list_m, list_m.size()) - ll;
+      e_trans[index_m(j)][index_d(j+1)] =
+        log_sum_log_vec(list_d, list_d.size()) - ll;
+      e_trans[index_m(j)][index_d(model_len)] =
+        log_sum_log_vec(list_l, list_l.size()) - ll;
+      list_i.clear();
+      list_m.clear();
+      list_d.clear();
+      list_l.clear();
+      // D_2~L-2: to D_j+1, M_j+1, I_j
+      // since D_j are inner deletion states, fd[j][0] are 0,
+      // so the loop bounds (1~seq_len-1) are same as M_j and I_j
+      if (j > 1) {
+        for (size_t i = 1; i < seq_len; ++i) {
+          list_m.push_back(fd[j-1][i]
+            + transition[index_d(j)][index_m(j+1)]
+            + emission[index_m(j+1)][observation[i]]
+            - emission[index_i(0)][observation[i]]
+            + bm[j+1][i+1]);
+          list_i.push_back(fd[j-1][i]
+            + transition[index_d(j)][index_i(j)]
+            + emission[index_i(j)][observation[i]]
+            - emission[index_i(0)][observation[i]]
+            + bi[j][i+1]);
+          list_d.push_back(fd[j-1][i]
+            + transition[index_d(j)][index_d(j+1)]
+            + bd[j][i]);
+        }
+        e_trans[index_d(j)][index_m(j+1)] =
+          log_sum_log_vec(list_m, list_m.size()) - ll;
+        e_trans[index_d(j)][index_i(j)] = 
+          log_sum_log_vec(list_i, list_i.size()) - ll;
+        e_trans[index_d(j)][index_d(j+1)] =
+          log_sum_log_vec(list_d, list_d.size()) - ll;
+        list_m.clear();
+        list_i.clear();
+        list_d.clear();
+      }
+    }
+
+    // Emissions
+    // not sure how to train bg emission, since log-odds ratio is used
+    // for all I_i:1~L-1
+    // how to determine pseudo count?
+    vector<vector<double> > list_emis(4, vector<double>(1, log(0.1)));
+    for (size_t j = 1; j < model_len; ++j) {
+      for (size_t i = 0; i < seq_len; ++i) {
+        list_emis[observation[i]].push_back(fi[j][i+1] + bi[j][i+1]);
+      }
+      for (size_t k = 0; k < 4; ++k) {
+        e_emiss[index_i(j)][k] =
+          log_sum_log_vec(list_emis[k], list_emis[k].size()) - ll;
+      }
+    }
+    list_emis.resize(4, vector<double>(1, log(0.01)));
+    // for all M_i:1~L
+    for (size_t j = 1; j <= model_len; ++j) {
+      for (size_t i = 0; i < seq_len; ++i) {
+        list_emis[observation[i]].push_back(fm[j][i+1] + bm[j][i+1]);
+      }
+      for (size_t k = 0; k < 4; ++k) {
+        e_emiss[index_m(j)][k] =
+          log_sum_log_vec(list_emis[k], list_emis[k].size()) - ll;
+      }
+    }
+
+    // maximize parameters
+    // Transitions
+    // M_0
+    double sum = log_sum_log(e_trans[index_m(0)][index_d(1)],
+      e_trans[index_m(0)][index_i(0)]);
+    transition[index_m(0)][index_d(1)] = e_trans[index_m(0)][index_d(1)]
+      - sum;
+    transition[index_m(0)][index_i(0)] = e_trans[index_m(0)][index_i(0)]
+      - sum;
+    // I_0
+    sum = log_sum_log_list({e_trans[index_i(0)][index_d(1)],
+      e_trans[index_i(0)][index_i(0)], e_trans[index_i(0)][total_size-1]});
+    transition[index_i(0)][index_d(1)] = e_trans[index_i(0)][index_d(1)] - sum;
+    transition[index_i(0)][index_i(0)] = e_trans[index_i(0)][index_i(0)] - sum;
+    transition[index_i(0)][total_size-1] =
+      e_trans[index_i(0)][total_size-1] - sum;
+    // D1 to M_i
+    vector<double>::const_iterator first = e_trans[index_d(1)].begin()
+      + index_m(1);
+    vector<double>::const_iterator last = e_trans[index_d(1)].begin()
+      + index_m(model_len);
+    vector<double> sum_list(first, last);
+    sum = log_sum_log_vec(sum_list, sum_list.size());
+    for (size_t i = 1; i <= model_len; ++i) {
+      transition[index_d(1)][index_m(i)] = e_trans[index_d(1)][index_m(i)]
+        - sum;
+    }
+    // D_L to I_0 and E
+    sum = log_sum_log(e_trans[index_d(model_len)][index_i(0)],
+      e_trans[index_d(model_len)][total_size-1]);
+    transition[index_d(model_len)][index_i(0)] =
+      e_trans[index_d(model_len)][index_i(0)] - sum;
+    transition[index_d(model_len)][total_size-1] =
+      e_trans[index_d(model_len)][total_size-1] - sum;
+    // D_L-1 to M_L and I_L-1
+    sum = log_sum_log(e_trans[index_d(model_len-1)][index_m(model_len)],
+      e_trans[index_d(model_len-1)][index_i(model_len-1)]);
+    transition[index_d(model_len-1)][index_m(model_len)] = 
+      e_trans[index_d(model_len-1)][index_m(model_len)] - sum;
+    transition[index_d(model_len-1)][index_i(model_len-1)] = 
+      e_trans[index_d(model_len-1)][index_i(model_len-1)] - sum;
+    // I_L-1 to I_L-1 and M_L
+    sum = log_sum_log(e_trans[index_i(model_len-1)][index_i(model_len-1)],
+      e_trans[index_i(model_len-1)][index_m(model_len)]);
+    transition[index_i(model_len-1)][index_i(model_len-1)] = 
+      e_trans[index_i(model_len-1)][index_i(model_len-1)] - sum;
+    transition[index_i(model_len-1)][index_m(model_len)] = 
+      e_trans[index_i(model_len-1)][index_m(model_len)] - sum;
+    // M_L-1 to I_L-1, M_L and D_L
+    sum = log_sum_log_list({
+      e_trans[index_m(model_len-1)][index_i(model_len-1)],
+      e_trans[index_m(model_len-1)][index_m(model_len)],
+      e_trans[index_m(model_len-1)][index_d(model_len)]});
+    transition[index_m(model_len-1)][index_i(model_len-1)] = 
+      e_trans[index_m(model_len-1)][index_i(model_len-1)] - sum;
+    transition[index_m(model_len-1)][index_m(model_len)] = 
+      e_trans[index_m(model_len-1)][index_m(model_len)] - sum;
+    transition[index_m(model_len-1)][index_d(model_len)] = 
+      e_trans[index_m(model_len-1)][index_d(model_len)] - sum;
+    // general
+    for (size_t j = 1; j < model_len - 1; ++j) {
+      // I_j: 1~L-2
+      sum = log_sum_log_list({
+        e_trans[index_i(j)][index_i(j)],
+        e_trans[index_i(j)][index_m(j+1)],
+        e_trans[index_i(j)][index_d(j+1)]});
+      transition[index_i(j)][index_i(j)] = 
+        e_trans[index_i(j)][index_i(j)] - sum;
+      transition[index_i(j)][index_m(j+1)] = 
+        e_trans[index_i(j)][index_m(j+1)] - sum;
+      transition[index_i(j)][index_d(j+1)] = 
+        e_trans[index_i(j)][index_d(j+1)] - sum;
+      // M_j: 1~L-2
+      sum = log_sum_log_list({
+        e_trans[index_m(j)][index_m(j+1)],
+        e_trans[index_m(j)][index_i(j)],
+        e_trans[index_m(j)][index_d(j+1)],
+        e_trans[index_m(j)][index_d(model_len)]});
+      transition[index_m(j)][index_m(j+1)] =
+        e_trans[index_m(j)][index_m(j+1)] - sum;
+      transition[index_m(j)][index_i(j)] = 
+        e_trans[index_m(j)][index_i(j)] - sum;
+      transition[index_m(j)][index_d(j+1)] = 
+        e_trans[index_m(j)][index_d(j+1)] - sum;
+      transition[index_m(j)][index_d(model_len)] =
+        e_trans[index_m(j)][index_d(model_len)] - sum;
+      // D_j: 2~L-2
+      if (j > 1) {
+        sum = log_sum_log_list({
+          e_trans[index_d(j)][index_d(j+1)],
+          e_trans[index_d(j)][index_i(j)],
+          e_trans[index_d(j)][index_m(j+1)]});
+        transition[index_d(j)][index_d(j+1)] = 
+          e_trans[index_d(j)][index_d(j+1)] - sum;
+        transition[index_d(j)][index_i(j)] = 
+          e_trans[index_d(j)][index_i(j)] - sum;
+        transition[index_d(j)][index_m(j+1)] = 
+          e_trans[index_d(j)][index_m(j+1)] - sum;
+      }
+    }
+
+    // Emissions
+    // I_i:1~L-1
+    // M_i:1~L
+    for (size_t j = 1; j <= model_len; ++j) {
+      vector<double> list_i, list_m;
+      for (size_t k =0; k < 4; ++k) {
+        if (j < model_len) {
+          for (size_t l = 0; l < 4; ++l) {
+            list_i.push_back(emission[index_i(j)][l]);
+          }
+          list_i.erase(list_i.begin() + k);
+          emission[index_i(j)][k] = e_emiss[index_i(j)][k]
+            - log_sum_log_vec(list_i, list_i.size());
+        }
+        list_i.clear();
+        for (size_t l = 0; l < 4; ++l) {
+          list_m.push_back(emission[index_m(j)][l]);
+        }
+        list_m.erase(list_m.begin() + k);
+        emission[index_m(j)][k] = e_emiss[index_m(j)][k]
+          - log_sum_log_vec(list_m, list_m.size());
+        list_m.clear();
+      }
+    }
+
+    // update forward and backward prob using updated parameters
+    forward_algorithm(false, transition, emission, observation);
+    backward_algorithm(false, transition, emission, observation);
+    if (itr > 1) ll = ll_new;
+    ll_new = forward_prob('E', 1, 1);
+    if (VERBOSE) {
+      cout << "ITER:" << itr << "/" << max_iterations << endl;
+      cout << ll << "\t" << ll_new << "\t" << ll_new - ll << endl;
+    }
+  }
+}
+
+size_t
+random_weighted_sample(const gsl_rng* rng, const vector<double> &prob) {
+  double cumulative = 0.0;
+  double rand = gsl_rng_uniform(rng);
+  size_t i;
+  for (i = 0; i < prob.size() && cumulative < rand; ++i) {
+    cumulative += exp(prob[i]);
+  }
+  return i-1;
+}
+
+void
+ProfileHMM::sample_sequence(const bool VERBOSE,
+    const gsl_rng* rng,
+    const vector<vector<double> > &transition,
+    const vector<vector<double> > &emission,
+    vector<int> &seq,
+    vector<size_t> &states) const {
+  size_t idx = 0;
+  states.push_back(idx);
+
+  while (idx < total_size - 1) {
+    idx = random_weighted_sample(rng, transition[idx]);
+    states.push_back(idx);
+    if (exp(log_sum_log_vec(emission[idx], emission[idx].size())) - 1.0
+      > -tolerance) {
+      seq.push_back(static_cast<int>(
+            random_weighted_sample(rng, emission[idx])));
+    }
+  }
+
+  if (VERBOSE) {
+    for (vector<size_t>::const_iterator i = states.begin();
+        i < states.end(); ++i)
+      cout << *i << " ";
+    cout << endl;
+    for (vector<int>::const_iterator i = seq.begin();
+        i < seq.end(); ++i)
+      cout << *i << " ";
+    cout << endl;
+  }
 }

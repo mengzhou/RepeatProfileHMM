@@ -49,7 +49,33 @@ index_d(const size_t model_len, const size_t idx) {
   return idx + model_len * 2;
 }
 
-void seq_to_int(const string &seq, vector<int> &observation) {
+template <typename T>
+void
+print_matrix(const vector<vector<T> > &matrix, const size_t offset = 0,
+    const bool print_row_sum = true) {
+  typename vector<vector<T> >::const_iterator first = matrix.begin();
+  for (typename vector<T>::const_iterator j = (*first).begin();
+    j < (*first).end(); ++j)
+    cout << "\t" << j - (*first).begin() + offset;
+  cout << endl;
+  for (typename vector<vector<T> >::const_iterator i = matrix.begin();
+    i < matrix.end(); ++i) {
+    cout << i - matrix.begin();
+    double sum = 0.0;
+    for(typename vector<T>::const_iterator j = (*i).begin();
+        j < (*i).end(); ++j) {
+      printf("\t%.3f", exp(*j));
+      sum += exp(*j);
+    }
+    if (print_row_sum)
+      cout << "\t" << sum << endl;
+    else
+      cout << endl;
+  }
+}
+
+void
+seq_to_int(const string &seq, vector<int> &observation) {
   for (string::const_iterator i = seq.begin(); i < seq.end(); ++i) {
     if (*i == 'A')
       observation.push_back(0);
@@ -62,8 +88,63 @@ void seq_to_int(const string &seq, vector<int> &observation) {
   }
 }
 
-void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
-    vector<vector<double> > &emission, vector<double> &initial,
+void
+int_to_seq(const vector<int> &observation, string &seq) {
+  for (vector<int>::const_iterator i = observation.begin();
+      i < observation.end(); ++i) {
+    if (*i == 0)
+      seq.append("A");
+    else if (*i == 1)
+      seq.append("C");
+    else if (*i == 2)
+      seq.append("G");
+    else if (*i == 3)
+      seq.append("T");
+  }
+}
+
+void
+print_trace(const vector<pair<char, size_t> > &trace) {
+  for (vector<pair<char, size_t> >::const_iterator i = trace.begin();
+      i < trace.end(); ++i) {
+    cout << (*i).first << (*i).second << " ";
+  }
+  cout << endl;
+}
+
+void
+state_to_trace(const vector<size_t> &states,
+    const size_t model_len,
+    vector<pair<char, size_t> > &trace) {
+  char state;
+  size_t idx;
+  for (vector<size_t>::const_iterator i = states.begin();
+      i < states.end(); ++i) {
+    if (*i <= model_len) {
+      state = 'M';
+      idx = *i;
+    }
+    else if (*i <= model_len * 2) {
+      state = 'I';
+      idx = *i - model_len - 1;
+    }
+    else if (*i <= model_len * 3) {
+      state = 'D';
+      idx = *i - model_len * 2;
+    }
+    else {
+      state = 'E';
+      idx = 0;
+    }
+  pair<char, size_t> step(state, idx);
+  trace.push_back(step);
+  }
+}
+
+void
+make_hmm_parameter(const bool VERBOSE, gsl_rng* rng,
+    vector<vector<double> > &transition,
+    vector<vector<double> > &emission,
     const size_t model_len) {
   // total size 
   // M_0(B) ~ M_L + I_0 ~ I_L-1 + D_1 ~ D_L + E
@@ -162,25 +243,10 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
 
   if (VERBOSE) {
     cout << "Transition" << endl;
-    for (size_t x = 0; x < total_size; ++x)
-      cout << "\t" << x;
-    cout << endl;
-    for (size_t x = 0; x < total_size; ++x) {
-      cout << x;
-      double sum = 0.0;
-      for (size_t y = 0; y < total_size; ++y) {
-        printf("\t%.3f", exp(transition[x][y]));
-        sum += exp(transition[x][y]);
-      }
-      cout << "\t" << sum << endl;
-    }
+    print_matrix(transition);
   }
 
   // setting emission
-  gsl_rng *rng;
-  rng = gsl_rng_alloc(gsl_rng_default);
-  size_t seed = time(0) * getpid();
-  gsl_rng_set(rng, seed);
   emission.resize(total_size);
   for (i = emission.begin(); i < emission.end(); ++i) {
     (*i).resize(alphabet_size);
@@ -230,70 +296,82 @@ void make_hmm_parameter(const bool VERBOSE, vector<vector<double> > &transition,
 
   if (VERBOSE) {
     cout << "Emission" << endl;
-    cout << "\tA\tC\tG\tT" << endl;
-    for (size_t x = 0; x < total_size; ++x) {
-      cout << x;
-      double sum = 0.0;
-      for (size_t y = 0; y < 4; ++y) {
-        printf("\t%.3f", exp(emission[x][y]));
-        sum += exp(emission[x][y]);
-      }
-      cout << "\t" << sum << endl;
-    }
+    print_matrix(emission);
   }
-
-  // setting initial prob
-  initial.resize(total_size);
-  for (vector<double>::iterator j = initial.begin(); j < initial.end(); ++j) {
-    *j = LOG_ZERO;
-  }
-  initial[0] = 0.0;
 }
 
-int main (int argc, const char **argv) {
+int
+main (int argc, const char **argv) {
   bool VERBOSE = false;
   string input;
   size_t model_len = 10;
+  size_t seed = 105;
   vector<vector<double> > transition, emission;
-  vector<double> initial;
 
   OptionParser opt_parse(argv[0], "Program for profile-HMM.");
 
-  opt_parse.add_opt("in", 'i', "Input sequence.", true, input);
+  opt_parse.add_opt("in", 'i', "Input sequence.", false, input);
   opt_parse.add_opt("len", 'l', "Model length.", false, model_len);
+  opt_parse.add_opt("seed", 's', "Random seed.", false, seed);
   opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
 
   vector<string> leftover_args;
   opt_parse.parse(argc, argv, leftover_args);
 
-  if (input.empty()) {
-    cerr << opt_parse.help_message() << endl
-      << opt_parse.about_message() << endl;
-    return EXIT_SUCCESS;
-  }
+  //if (input.empty()) {
+  //  cout << opt_parse.help_message() << endl
+  //    << opt_parse.about_message() << endl;
+  //  return EXIT_SUCCESS;
+  //}
 
-  cout << "Input: " << input << endl;
-  cout << "Model length: " << model_len << endl;
-  make_hmm_parameter(VERBOSE, transition, emission, initial, model_len);
-  vector<int> observation;
-  vector<pair<char, size_t> > trace;
-  seq_to_int(input, observation);
+  gsl_rng *rng;
+  rng = gsl_rng_alloc(gsl_rng_default);
+  //size_t seed = time(0) * getpid();
+  gsl_rng_set(rng, seed);
+
+  make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
   ProfileHMM hmm(model_len);
-  const double lh = 
-  hmm.ViterbiDecoding(VERBOSE, transition, emission, initial, observation, trace);
-
-  cout << endl << "Result: " << lh << endl;
-  for (vector<pair<char, size_t> >::const_iterator i = trace.begin();
-      i < trace.end(); ++i) {
-    cout << (*i).first << (*i).second << " ";
+  // decoding test
+  if (!input.empty()) {
+    if (VERBOSE) {
+      cout << "Input: " << input << endl;
+      cout << "Model length: " << model_len << endl;
+    }
+    vector<pair<char, size_t> > trace;
+    vector<int> observation;
+    seq_to_int(input, observation);
+    const double lh = 
+    hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
+    cout << "Result: " << lh << endl;
+    print_trace(trace);
   }
-  cout << endl;
+  else {
+    for (size_t i = 1; i <= 3; ++i) {
+      // sampling test
+      vector<pair<char, size_t> > trace;
+      vector<size_t> states;
+      vector<int> seq;
+      string output;
+      hmm.sample_sequence(VERBOSE, rng, transition, emission, seq, states);
+      cout << "#Trial " << i << endl;
+      int_to_seq(seq, output);
+      cout << "  Sampled seq:\t" << output << endl;
+      state_to_trace(states, model_len, trace);
+      cout << "  Trace:\t";
+      print_trace(trace);
+      trace.clear();
+      hmm.ViterbiDecoding(VERBOSE, transition, emission, seq, trace);
+      cout << "  Decoded:\t";
+      print_trace(trace);
+      cout << endl;
+    }
+  }
 
-  hmm.forward_algorithm(VERBOSE, transition, emission, initial, observation);
-  //cout << "P1=" << exp(hmm.forward_prob('M', 2, 4)) << endl;
-  //cout << "P2=" << exp(hmm.forward_prob('I', 1, 3)) << endl;
-  //cout << "P3=" << exp(hmm.forward_prob('D', 2, 2)) << endl;
-  cout << "P=" << exp(hmm.forward_prob('E', 2, 2)) << endl;
-  hmm.backward_algorithm(VERBOSE, transition, emission, initial, observation);
-  //cout << "P1=" << exp(hmm.backward_prob('M', 2, 2)) << endl;
+  // learning test
+  //hmm.forward_algorithm(VERBOSE, transition, emission, observation);
+  //cout << "P=" << exp(hmm.forward_prob('E', 2, 2)) << endl;
+  //hmm.backward_algorithm(VERBOSE, transition, emission, observation);
+  //hmm.BW_training(VERBOSE, transition, emission, observation);
+  //print_matrix(transition,0,true);
+  //print_matrix(emission,0,true);
 }
