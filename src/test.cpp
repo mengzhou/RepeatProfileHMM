@@ -31,6 +31,7 @@
 
 #include "ProfileHMM.hpp"
 #include "OptionParser.hpp"
+#include "smithlab_os.hpp"
 
 using namespace std;
 
@@ -72,16 +73,20 @@ print_matrix(const vector<vector<T> > &matrix, const size_t offset = 0,
 }
 
 void
-seq_to_int(const string &seq, vector<int> &observation) {
+seq_to_int(const gsl_rng* rng, const string &seq, vector<int> &observation) {
   for (string::const_iterator i = seq.begin(); i < seq.end(); ++i) {
-    if (*i == 'A')
+    if (*i == 'A' || *i == 'a')
       observation.push_back(0);
-    else if (*i == 'C')
+    else if (*i == 'C' || *i == 'c')
       observation.push_back(1);
-    else if (*i == 'G')
+    else if (*i == 'G' || *i == 'g')
       observation.push_back(2);
-    else if (*i == 'T')
+    else if (*i == 'T' || *i == 't')
       observation.push_back(3);
+    else {
+      // usually this case is N; then randomly assign one base
+      observation.push_back(gsl_rng_uniform_int(rng, 4));
+    }
   }
 }
 
@@ -212,7 +217,7 @@ write_hmm_parameter(const bool VERBOSE,
 }
 
 void
-make_hmm_parameter(const bool VERBOSE, gsl_rng* rng,
+make_hmm_parameter(const bool VERBOSE, const gsl_rng* rng,
     vector<vector<double> > &transition,
     vector<vector<double> > &emission,
     const size_t model_len) {
@@ -380,7 +385,8 @@ main (int argc, const char **argv) {
 
   OptionParser opt_parse(argv[0], "Program for profile-HMM.");
 
-  opt_parse.add_opt("in", 'i', "Input sequence.", false, input);
+  opt_parse.add_opt("in", 'i', "Input sequence (string) or a fasta file.",
+    false, input);
   opt_parse.add_opt("len", 'l', "Model length.", false, model_len);
   opt_parse.add_opt("seed", 's', "Random seed.", false, seed);
   opt_parse.add_opt("in-params", 'p', "Input parameters file.", false, in_par);
@@ -415,9 +421,19 @@ main (int argc, const char **argv) {
       cout << "Input: " << input << endl;
       cout << "Model length: " << model_len << endl;
     }
+    const string suffix(input.substr(input.find_last_of(".")+1));
+    string input_seq;
+    if (suffix.compare("fa") == 0) {
+      vector<string> chrom_names, ref_chroms;
+      read_fasta_file(input, chrom_names, ref_chroms);
+      input_seq = ref_chroms[0];
+    }
+    else {
+      input_seq = input;
+    }
     vector<pair<char, size_t> > trace;
     vector<int> observation;
-    seq_to_int(input, observation);
+    seq_to_int(rng, input_seq, observation);
     const double lh = 
     hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     cout << "Result: " << lh << endl;

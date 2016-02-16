@@ -53,7 +53,7 @@ def three_prime_truncation_and_normalize(fractions, model_len, position):
   # 3' truncation probability: negatively proportional to the distance to
   # 3' end of the repeat
   assert position > 0 and position < model_len
-  WEIGHT = 0.2 * (1.0 * position / model_len)
+  WEIGHT = 0.2 * (0.5 * position / model_len + 0.5)
   new_fractions = [i * (1.0 - WEIGHT) for i in fractions]
   new_fractions.append(WEIGHT)
   assert abs(sum(new_fractions) - 1) < 1e-4
@@ -155,7 +155,7 @@ def main():
       idx_j = state_to_model_index(model_len, state, next_state_idx)
       transition[idx_i][idx_j] += 1
       if i+1 == end and not state == 'D':
-        emission[idx_i][emission_index(data[name][i])] += 1
+        emission[idx_i][emission_index(data[name][i+1])] += 1
 
   # 6. add pseudo counts, and convert counts to probabilities and normalize
   # to make sure the sum is 1

@@ -45,7 +45,7 @@ install: $(PROGS)
 	@mkdir -p $(SRC_ROOT)/bin
 	@install -m 755 $(PROGS) $(SRC_ROOT)/bin
 
-$(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o OptionParser.o)\
+$(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o OptionParser.o)\
   ProfileHMM.o
 
 %.o: %.cpp %.hpp
