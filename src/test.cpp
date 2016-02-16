@@ -22,6 +22,8 @@
 #include <string>
 #include <cmath>
 #include <stdio.h>
+#include <fstream>
+#include <sstream>
 #include <random>
 #include <gsl/gsl_randist.h>
 #include <sys/types.h>
@@ -30,12 +32,7 @@
 #include "ProfileHMM.hpp"
 #include "OptionParser.hpp"
 
-using std::vector;
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::string;
-using std::pair;
+using namespace std;
 
 size_t
 index_i(const size_t model_len, const size_t idx) {
@@ -139,6 +136,79 @@ state_to_trace(const vector<size_t> &states,
   pair<char, size_t> step(state, idx);
   trace.push_back(step);
   }
+}
+    
+void
+load_hmm_parameter(const bool VERBOSE,
+    const string &input_file,
+    vector<vector<double> > &transition,
+    vector<vector<double> > &emission,
+    const size_t model_len) {
+  /* Format of input file:
+   transition_value1 transition_value2 ...
+   //
+   emission_value1 ...
+   //
+  */
+  ifstream in(input_file.c_str());
+  // skip header with #
+  string line;
+  getline(in, line);
+  while((line.substr(0,1)) == "#"){
+    getline(in, line);
+  }
+
+  assert(transition.empty());
+  double val;
+  while (!line.empty() && line.compare("//")) {
+    transition.push_back(vector<double>());
+    istringstream iss(line);
+    while (iss >> val) {
+      (*(transition.end()-1)).push_back(val);
+    }
+    getline(in, line);
+  }
+  assert(emission.empty());
+  getline(in, line);
+  while (!line.empty() && line.compare("//")) {
+    emission.push_back(vector<double>());
+    istringstream iss(line);
+    while (iss >> val) {
+      (*(emission.end()-1)).push_back(val);
+    }
+    getline(in, line);
+  }
+
+  const size_t total_size = model_len * 3 + 2;
+  assert(transition.size() == total_size);
+  assert((*transition.begin()).size() == total_size);
+  assert(emission.size() == total_size);
+}
+
+void
+write_hmm_parameter(const bool VERBOSE,
+    const string &output_file,
+    const vector<vector<double> > &transition,
+    const vector<vector<double> > &emission) {
+  ofstream out(output_file.c_str());
+  for (vector<vector<double> >::const_iterator i = transition.begin();
+      i < transition.end(); ++i) {
+    for (vector<double>::const_iterator j = (*i).begin();
+        j < (*i).end(); ++j) {
+      out << *j << "\t";
+    }
+    out << endl;
+  }
+  out << "//" << endl;
+  for (vector<vector<double> >::const_iterator i = emission.begin();
+      i < emission.end(); ++i) {
+    for (vector<double>::const_iterator j = (*i).begin();
+        j < (*i).end(); ++j) {
+      out << *j << "\t";
+    }
+    out << endl;
+  }
+  out << "//" << endl;
 }
 
 void
@@ -303,9 +373,9 @@ make_hmm_parameter(const bool VERBOSE, gsl_rng* rng,
 int
 main (int argc, const char **argv) {
   bool VERBOSE = false;
-  string input;
+  string input, in_par, out_par;
   size_t model_len = 10;
-  size_t seed = 105;
+  size_t seed = time(0) * getpid();
   vector<vector<double> > transition, emission;
 
   OptionParser opt_parse(argv[0], "Program for profile-HMM.");
@@ -313,23 +383,31 @@ main (int argc, const char **argv) {
   opt_parse.add_opt("in", 'i', "Input sequence.", false, input);
   opt_parse.add_opt("len", 'l', "Model length.", false, model_len);
   opt_parse.add_opt("seed", 's', "Random seed.", false, seed);
+  opt_parse.add_opt("in-params", 'p', "Input parameters file.", false, in_par);
+  opt_parse.add_opt("out-params", 'q', "Output parameters file.", false, out_par);
   opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
 
   vector<string> leftover_args;
   opt_parse.parse(argc, argv, leftover_args);
 
-  //if (input.empty()) {
-  //  cout << opt_parse.help_message() << endl
-  //    << opt_parse.about_message() << endl;
-  //  return EXIT_SUCCESS;
-  //}
+  if (!leftover_args.empty() || in_par.compare(out_par) == 0) {
+    cout << opt_parse.help_message() << endl
+      << opt_parse.about_message() << endl;
+    return EXIT_SUCCESS;
+  }
 
   gsl_rng *rng;
   rng = gsl_rng_alloc(gsl_rng_default);
-  //size_t seed = time(0) * getpid();
   gsl_rng_set(rng, seed);
 
-  make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
+  if (in_par.empty())
+    make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
+  else
+    load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
+
+  if (!out_par.empty())
+    write_hmm_parameter(VERBOSE, out_par, transition, emission);
+
   ProfileHMM hmm(model_len);
   // decoding test
   if (!input.empty()) {

@@ -19,3 +19,6 @@ bin/
 
 # no binaries
 test
+
+# no other testing stuff
+*.params
