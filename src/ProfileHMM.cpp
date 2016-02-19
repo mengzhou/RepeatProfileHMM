@@ -152,10 +152,15 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
         + emission[index_i(j)][observation[i-1]]
         - emission[index_i(0)][observation[i-1]];
       // D_i
-      vd[j-1][i] = max({
-        vm[j-1][i] + transition[index_m(j-1)][index_d(j)],
-        vi[j-1][i] + transition[index_i(j-1)][index_d(j)],
-        vd[j-2][i] + transition[index_d(j-1)][index_d(j)]});
+      if (j > 2)
+        vd[j-1][i] = max({
+          vm[j-1][i] + transition[index_m(j-1)][index_d(j)],
+          vi[j-1][i] + transition[index_i(j-1)][index_d(j)],
+          vd[j-2][i] + transition[index_d(j-1)][index_d(j)]});
+      else
+        vd[j-1][i] = max({
+          vm[j-1][i] + transition[index_m(j-1)][index_d(j)],
+          vi[j-1][i] + transition[index_i(j-1)][index_d(j)]});
     }
     // M_model_len
     vm[model_len][i] = max({
@@ -244,120 +249,112 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
     trace.push_back(step);
     if (VERBOSE)
       cout << state << state_idx << ", " << seq_idx << endl;
-    switch (state) {
-      case 'M': {
-        // state_idx = 2~L
-        if (state_idx > 1) {
-          size_t max_idx = max_item({
-            vm[state_idx-1][seq_idx-1] 
-              + transition[index_m(state_idx-1)][index_m(state_idx)],
-            vi[state_idx-1][seq_idx-1]
-              + transition[index_i(state_idx-1)][index_m(state_idx)],
-            vd[state_idx-2][seq_idx-1]
-              + transition[index_d(state_idx-1)][index_m(state_idx)],
-            vd[0][seq_idx-1]
-              + transition[index_d(1)][index_m(state_idx)]});
-          if (max_idx == 0) {
-            --state_idx;
-          } else if (max_idx == 1) {
-            state = 'I';
-            --state_idx;
-          } else if (max_idx == 2) {
-            state = 'D';
-            --state_idx;
-          } else if (max_idx == 3) {
-            state = 'D';
-            state_idx = 1;
-          }
-        } else if (state_idx == 1) {
+    if (state == 'M') {
+      // state_idx = 2~L
+      if (state_idx > 1) {
+        size_t max_idx = max_item({
+          vm[state_idx-1][seq_idx-1] 
+            + transition[index_m(state_idx-1)][index_m(state_idx)],
+          vi[state_idx-1][seq_idx-1]
+            + transition[index_i(state_idx-1)][index_m(state_idx)],
+          vd[state_idx-2][seq_idx-1]
+            + transition[index_d(state_idx-1)][index_m(state_idx)],
+          vd[0][seq_idx-1]
+            + transition[index_d(1)][index_m(state_idx)]});
+        if (max_idx == 0) {
+          --state_idx;
+        } else if (max_idx == 1) {
+          state = 'I';
+          --state_idx;
+        } else if (max_idx == 2) {
+          state = 'D';
+          --state_idx;
+        } else if (max_idx == 3) {
           state = 'D';
           state_idx = 1;
         }
-        --seq_idx;
-        break;
+      } else if (state_idx == 1) {
+        state = 'D';
+        state_idx = 1;
       }
-      case 'I': {
-        if (state_idx == 0) {
-          size_t max_idx = max_item({
-            vm[0][seq_idx-1]
-              + transition[index_m(0)][index_i(0)],
-            vi[0][seq_idx-1]
-              + transition[index_i(0)][index_i(0)],
-            vd[model_len-1][seq_idx-1]
-              + transition[index_d(model_len)][index_i(0)],
-            });
-          if (max_idx == 0) {
-            state = 'M';
-            state_idx = 0;
-          } else if (max_idx == 1) {
-            ;
-          } else if (max_idx == 2) {
-            state = 'D';
-            state_idx = model_len;
-          }
-        }
-        else {
-          size_t max_idx = max_item({
-            vm[state_idx][seq_idx-1]
-              + transition[index_m(state_idx)][index_i(state_idx)],
-            vi[state_idx][seq_idx-1]
-              + transition[index_i(state_idx)][index_i(state_idx)],
-            vd[state_idx-1][seq_idx-1]
-              + transition[index_d(state_idx)][index_i(state_idx)]});
-          if (max_idx == 0) {
-            state = 'M';
-          } else if (max_idx == 1) {
-            ;
-          } else if (max_idx == 2) {
-            state = 'D';
-          }
-        }
-        --seq_idx;
-        break;
-      }
-      case 'D': {
-        if (state_idx == model_len) {
-          vector<double> list;
-          for (size_t k = 1; k < model_len + 1; ++k) {
-            list.push_back(vm[k][seq_idx]
-                + transition[index_m(k)][index_d(model_len)]);
-          }
-          const vector<double>::const_iterator x = 
-            std::max_element(list.begin(), list.end());
-          state_idx = x - list.begin() + 1;
+      --seq_idx;
+    }
+    else if (state == 'I') {
+      if (state_idx == 0) {
+        size_t max_idx = max_item({
+          vm[0][seq_idx-1]
+            + transition[index_m(0)][index_i(0)],
+          vi[0][seq_idx-1]
+            + transition[index_i(0)][index_i(0)],
+          vd[model_len-1][seq_idx-1]
+            + transition[index_d(model_len)][index_i(0)],
+          });
+        if (max_idx == 0) {
           state = 'M';
-        }
-        else if (state_idx == 1) {
-          size_t max_idx = max_item({
-            vm[0][seq_idx]
-              + transition[index_m(0)][index_d(1)],
-            vi[0][seq_idx]
-              + transition[index_i(0)][index_d(1)]});
-          if (max_idx == 0) {
-            state = 'M';
-          } else if (max_idx == 1) {
-            state = 'I';
-          }
           state_idx = 0;
+        } else if (max_idx == 1) {
+          ;
+        } else if (max_idx == 2) {
+          state = 'D';
+          state_idx = model_len;
         }
-        else {
-          size_t max_idx = max_item({
-            vm[state_idx-1][seq_idx]
-              + transition[index_m(state_idx-1)][index_d(state_idx)],
-            vi[state_idx-1][seq_idx],
-              + transition[index_i(state_idx-1)][index_d(state_idx)],
-            vd[state_idx-2][seq_idx]
-              + transition[index_d(state_idx-1)][index_d(state_idx)]});
-          switch (max_idx) {
-            case 0:
-              state = 'M';
-            case 1:
-              state = 'I';
-            case 2:
-              ;
-          }
-          --state_idx;
+      }
+      else {
+        size_t max_idx = max_item({
+          vm[state_idx][seq_idx-1]
+            + transition[index_m(state_idx)][index_i(state_idx)],
+          vi[state_idx][seq_idx-1]
+            + transition[index_i(state_idx)][index_i(state_idx)],
+          vd[state_idx-1][seq_idx-1]
+            + transition[index_d(state_idx)][index_i(state_idx)]});
+        if (max_idx == 0) {
+          state = 'M';
+        } else if (max_idx == 1) {
+          ;
+        } else if (max_idx == 2) {
+          state = 'D';
         }
+      }
+      --seq_idx;
+    }
+    else if (state == 'D') {
+      if (state_idx == model_len) {
+        vector<double> list;
+        for (size_t k = 1; k < model_len + 1; ++k) {
+          list.push_back(vm[k][seq_idx]
+              + transition[index_m(k)][index_d(model_len)]);
+        }
+        const vector<double>::const_iterator x = 
+          std::max_element(list.begin(), list.end());
+        state_idx = x - list.begin() + 1;
+        state = 'M';
+      }
+      else if (state_idx == 1) {
+        size_t max_idx = max_item({
+          vm[0][seq_idx]
+            + transition[index_m(0)][index_d(1)],
+          vi[0][seq_idx]
+            + transition[index_i(0)][index_d(1)]});
+        if (max_idx == 0) {
+          state = 'M';
+        } else if (max_idx == 1) {
+          state = 'I';
+        }
+        state_idx = 0;
+      }
+      else {
+        size_t max_idx = max_item({
+          vm[state_idx-1][seq_idx]
+            + transition[index_m(state_idx-1)][index_d(state_idx)],
+          vi[state_idx-1][seq_idx]
+            + transition[index_i(state_idx-1)][index_d(state_idx)],
+          vd[state_idx-2][seq_idx]
+            + transition[index_d(state_idx-1)][index_d(state_idx)]});
+        if (max_idx == 0)
+          state = 'M';
+        else if (max_idx == 1)
+          state = 'I';
+        --state_idx;
       }
     }
   }
@@ -421,10 +418,15 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
         + emission[index_i(j)][observation[i-1]]
         - emission[index_i(0)][observation[i-1]];
       // D_i
-      fd[j-1][i] = log_sum_log_list({
-        fm[j-1][i] + transition[index_m(j-1)][index_d(j)],
-        fi[j-1][i] + transition[index_i(j-1)][index_d(j)],
-        fd[j-2][i] + transition[index_d(j-1)][index_d(j)]});
+      if (j > 2)
+        fd[j-1][i] = log_sum_log_list({
+          fm[j-1][i] + transition[index_m(j-1)][index_d(j)],
+          fi[j-1][i] + transition[index_i(j-1)][index_d(j)],
+          fd[j-2][i] + transition[index_d(j-1)][index_d(j)]});
+      else
+        fd[j-1][i] = log_sum_log_list({
+          fm[j-1][i] + transition[index_m(j-1)][index_d(j)],
+          fi[j-1][i] + transition[index_i(j-1)][index_d(j)]});
     }
     // M_model_len
     fm[model_len][i] = log_sum_log_list({

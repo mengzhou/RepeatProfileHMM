@@ -107,9 +107,12 @@ int_to_seq(const vector<int> &observation, string &seq) {
 
 void
 print_trace(const vector<pair<char, size_t> > &trace) {
+  size_t counter = 0;
   for (vector<pair<char, size_t> >::const_iterator i = trace.begin();
       i < trace.end(); ++i) {
-    cout << (*i).first << (*i).second << " ";
+    cout << counter << "\t" << (*i).first << (*i).second << endl;
+    if (((*i).first == 'M' && (*i).second > 0) or (*i).first == 'I')
+      ++counter;
   }
   cout << endl;
 }
@@ -436,7 +439,6 @@ main (int argc, const char **argv) {
     seq_to_int(rng, input_seq, observation);
     const double lh = 
     hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
-    cout << "Result: " << lh << endl;
     print_trace(trace);
   }
   else {

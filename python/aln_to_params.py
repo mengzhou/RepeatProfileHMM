@@ -17,15 +17,26 @@ def index_d(model_len, idx):
   # D_1 ~ D_L
   return model_len * 2 + idx
 
-def skip_truncation(seq, ref = None):
+def col_summary(data, col):
+  """Generate a summary for the given column about how many
+  non "-" characters there are. used for determining match or insert state
+  """
+  match = 0
+  for name in data.keys():
+    if not data[name][col] == '-':
+      match += 1
+
+  return match > len(data.keys()) / 2.0
+
+def skip_truncation(col_states, ref_states = None):
   # ref is usually the consensus sequence. because I want to start from the
   # first homologous state (M) for each sequence, all those truncations and
   # the proceeding insertions should be skipped
   start = 0
-  end = len(seq) - 1
-  while seq[start] == '-' or (ref and ref[start] == '-'):
+  end = len(col_states) - 1
+  while col_states[start] == 1 or (ref_states and ref_states[start] == 1):
     start += 1
-  while seq[end] == '-' or (ref and ref[end] == '-'):
+  while col_states[end] == 1 or (ref_states and ref_states[end] == 1):
     end -= 1
   return start, end
 
@@ -43,9 +54,12 @@ def emission_index(nt):
   alphabet = {'A':0, 'C':1, 'G':2, 'T':3}
   return alphabet[nt]
 
-def pseudo_count_and_normalize(counts):
+def pseudo_count_and_normalize(counts, only_zero = False):
   PSEUDO_COUNT = min(10.0, max(sum(counts)*0.1, 0.1))
-  fractions = [i + PSEUDO_COUNT for i in counts]
+  if only_zero:
+    fractions = [i if i > 0 else i + PSEUDO_COUNT for i in counts]
+  else:
+    fractions = [i + PSEUDO_COUNT for i in counts]
 
   return [i/sum(fractions) for i in fractions]
 
@@ -53,12 +67,26 @@ def three_prime_truncation_and_normalize(fractions, model_len, position):
   # 3' truncation probability: negatively proportional to the distance to
   # 3' end of the repeat
   assert position > 0 and position < model_len
-  WEIGHT = 0.2 * (0.5 * position / model_len + 0.5)
+  WEIGHT = 0.1 * position / model_len + 0.05
   new_fractions = [i * (1.0 - WEIGHT) for i in fractions]
   new_fractions.append(WEIGHT)
   assert abs(sum(new_fractions) - 1) < 1e-4
 
   return new_fractions
+
+def get_consensus(data, consensus_states):
+  alphabet = {'A':0, 'C':1, 'G':2, 'T':3}
+  translate = {0:'A', 1:'C', 2:'G', 3:'T'}
+  consensus = []
+  for i, state in enumerate(consensus_states):
+    if state == 1:
+      counts = [0] * 4
+      for name in data.keys():
+        if not data[name][i] == '-':
+          counts[alphabet[data[name][i]]] += 1
+      consensus.append(translate[counts.index(max(counts))])
+
+  return "".join(consensus)
   
 def main():
   global LOG_ZERO
@@ -96,22 +124,28 @@ def main():
   for name in data.keys():
     data[name] = "".join(data[name])
 
-  if "consensus" not in data.keys():
-    sys.stderr.write("Input alignment file must have a sequence named as consensus!\n")
-    sys.exit(0)
-
   # 2. initialize parameters
-  model_len = len(data["consensus"]) - data["consensus"].count('-')
+  if "consensus" not in data.keys():
+    # use MLE to decide the consensus states for each column
+    consensus_states = [0 if col_summary(data, i) else 1 \
+      for i in xrange(len(data[data.keys()[0]]))]
+    model_len = consensus_states.count(0)
+  else:
+    model_len = len(data["consensus"]) - data["consensus"].count('-')
+    # 0 for match, 1 for insertion
+    consensus_states = [1 if data["consensus"][i] == '-' else 0 \
+      for i in xrange(len(data["consensus"]))]
+
   total_size = model_len * 3 + 2;
   transition = [[0] * total_size for i in xrange(total_size)]
   emission = [[0] * 4 for i in xrange(total_size)]
 
   # 3. find the column indices (i for the M_i) through the consensus
-  ref_start, ref_end = skip_truncation(data["consensus"])
+  ref_start, ref_end = skip_truncation(consensus_states)
   col = 0
   col_idx = []
   for i in xrange(ref_start, ref_end+1):
-    if not data["consensus"][i] == '-':
+    if consensus_states[i] == 0:
       col += 1
     col_idx.append(col)
 
@@ -121,41 +155,48 @@ def main():
   for name in data.keys():
     if name == "consensus":
       continue
-    start, end = skip_truncation(data[name], data["consensus"])
-    start = max(start, ref_start)
-    end = min(end, ref_end)
-    # 5. now get the counts of transition and emission
-    for i in xrange(start, end):
-      state_idx = col_idx[i - ref_start]
-      nt = data[name][i]
-      ref_nt = data["consensus"][i]
-      if nt == '-' and not ref_nt == '-':
-        state = 'D'
-      elif not nt == '-' and ref_nt == '-':
-        state = 'I'
-      elif not nt == '-' and not ref_nt == '-':
-        state = 'M'
+    current_state = []
+    for i in xrange(len(data[name])):
+      if consensus_states[i] == 0 and not data[name][i] == '-':
+        current_state.append(0)
       else:
-        continue
+        current_state.append(1)
+
+    start, end = skip_truncation(current_state, consensus_states)
+    pool = []
+    for i in xrange(start, end):
+      if not (consensus_states[i] == 1 and data[name][i] == '-'):
+        pool.append(i)
+    # 5. now get the counts of transition and emission
+    for i in xrange(len(pool)-1):
+      state_idx = col_idx[pool[i] - ref_start]
+      if consensus_states[pool[i]] == 0:
+        if current_state[pool[i]] == 0:
+          state = 'M'
+        else:
+          state = 'D'
+      else:
+        state = 'I'
       idx_i = state_to_model_index(model_len, state, state_idx)
       if not state == 'D':
-        emission[idx_i][emission_index(data[name][i])] += 1
+        emission[idx_i][emission_index(data[name][pool[i]])] += 1
 
-      next_state_idx = col_idx[i - ref_start + 1]
-      next_nt = data[name][i+1]
-      next_ref_nt = data["consensus"][i+1]
-      if next_nt == '-' and not next_ref_nt == '-':
-        state = 'D'
-      elif not next_nt == '-' and next_ref_nt == '-':
-        state = 'I'
-      elif not next_nt == '-' and not next_ref_nt == '-':
-        state = 'M'
+      j = i + 1
+      next_state_idx = col_idx[pool[j] - ref_start]
+      if consensus_states[pool[j]] == 0:
+        if current_state[pool[j]] == 0:
+          state = 'M'
+        else:
+          state = 'D'
       else:
-        continue
+        if data[name][pool[j]] == '-':
+          continue
+        else:
+          state = 'I'
       idx_j = state_to_model_index(model_len, state, next_state_idx)
       transition[idx_i][idx_j] += 1
-      if i+1 == end and not state == 'D':
-        emission[idx_i][emission_index(data[name][i+1])] += 1
+      if pool[j] == end and not state == 'D':
+        emission[idx_j][emission_index(data[name][pool[j]])] += 1
 
   # 6. add pseudo counts, and convert counts to probabilities and normalize
   # to make sure the sum is 1
@@ -221,8 +262,10 @@ def main():
     transition[index_m(model_len,0)][index_i(model_len,0)] = \
     (0.1, 0.9)
   transition[index_d(model_len,1)]\
-    [index_m(model_len,0):index_m(model_len,model_len)+1] = \
-    pseudo_count_and_normalize([min(0.1*i+0.3, 2.0) for i in xrange(model_len)])
+    [index_m(model_len,1):index_m(model_len,model_len)+1] = \
+    [0.9] + [0.1/(model_len-1) for i in xrange(model_len-1)]
+    #pseudo_count_and_normalize(\
+    #  [min(0.01*i+0.02, 0.05) for i in xrange(model_len-1)], True)
     # just some crazy weight function
   transition[index_i(model_len,0)][index_i(model_len,0)], \
     transition[index_i(model_len,0)][index_d(model_len,1)], \
@@ -231,7 +274,8 @@ def main():
     transition[index_d(model_len,model_len)][total_size-1] = (0.9, 0.1)
 
   # 6.2 emissions
-  emission[index_i(model_len,0)] = [0.3, 0.2, 0.2, 0.3]
+  # human chrM
+  emission[index_i(model_len,0)] = [0.308551,0.313318,0.131555,0.246575]
   for i in xrange(1, model_len+1):
     # M_1~M_L
     emission[index_m(model_len,i)] = \
@@ -257,6 +301,12 @@ def main():
 
   # 8. output
   outfh = open(opt.outfile, 'w')
+  outfh.write("# Model length: %d\n"%model_len)
+  consensus_seq = get_consensus(data, consensus_states)
+  consensus_seq_wrapped = "\n#".join(\
+    [consensus_seq[i:i+50] for i in xrange(0,len(consensus_seq), 50)])
+  outfh.write("#%s\n"%consensus_seq_wrapped)
+  outfh.write("#%s\n"%",".join([str(i) for i in consensus_states]))
   for row in xrange(len(transition)):
     for i in transition[row]:
       outfh.write("%f\t"%i)
