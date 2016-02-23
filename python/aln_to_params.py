@@ -28,15 +28,12 @@ def col_summary(data, col):
 
   return match > len(data.keys()) / 2.0
 
-def skip_truncation(col_states, ref_states = None):
-  # ref is usually the consensus sequence. because I want to start from the
-  # first homologous state (M) for each sequence, all those truncations and
-  # the proceeding insertions should be skipped
+def skip_truncation(col_states):
   start = 0
   end = len(col_states) - 1
-  while col_states[start] == 1 or (ref_states and ref_states[start] == 1):
+  while col_states[start] == 1:
     start += 1
-  while col_states[end] == 1 or (ref_states and ref_states[end] == 1):
+  while col_states[end] == 1:
     end -= 1
   return start, end
 
@@ -54,14 +51,17 @@ def emission_index(nt):
   alphabet = {'A':0, 'C':1, 'G':2, 'T':3}
   return alphabet[nt]
 
-def pseudo_count_and_normalize(counts, only_zero = False):
-  PSEUDO_COUNT = min(10.0, max(sum(counts)*0.1, 0.1))
-  if only_zero:
-    fractions = [i if i > 0 else i + PSEUDO_COUNT for i in counts]
+def pseudo_count_and_normalize(counts, prior = None):
+  # apply Laplace's rule first
+  fractions = [1.0*(counts[i]+1)/(sum(counts) + len(counts)) \
+    for i in xrange(len(counts))]
+  if prior:
+    assert len(counts) == len(prior)
+    new_frac = [fractions[i] + prior[i] for i in xrange(len(prior))]
   else:
-    fractions = [i + PSEUDO_COUNT for i in counts]
+    new_frac = fractions
 
-  return [i/sum(fractions) for i in fractions]
+  return [i/sum(new_frac) for i in new_frac]
 
 def three_prime_truncation_and_normalize(fractions, model_len, position):
   # 3' truncation probability: negatively proportional to the distance to
@@ -74,17 +74,13 @@ def three_prime_truncation_and_normalize(fractions, model_len, position):
 
   return new_fractions
 
-def get_consensus(data, consensus_states):
-  alphabet = {'A':0, 'C':1, 'G':2, 'T':3}
+def get_consensus(emission):
+  model_len = (len(emission)-2) / 3
   translate = {0:'A', 1:'C', 2:'G', 3:'T'}
   consensus = []
-  for i, state in enumerate(consensus_states):
-    if state == 1:
-      counts = [0] * 4
-      for name in data.keys():
-        if not data[name][i] == '-':
-          counts[alphabet[data[name][i]]] += 1
-      consensus.append(translate[counts.index(max(counts))])
+  for column in emission[index_m(model_len,1):index_m(model_len,model_len)+1]:
+    idx = column.index(max(column))
+    consensus.append(translate[idx])
 
   return "".join(consensus)
   
@@ -162,7 +158,21 @@ def main():
       else:
         current_state.append(1)
 
-    start, end = skip_truncation(current_state, consensus_states)
+    start, end = skip_truncation(current_state)
+    if start > ref_start:
+      transition[index_d(model_len, 1)]\
+        [index_m(model_len, start - ref_start + 1)] += 1
+    else:
+      transition[index_d(model_len, 1)]\
+        [index_m(model_len, 1)] += 1
+    if ref_end > end:
+      transition[index_m(model_len, model_len + end - ref_end)]\
+        [index_d(model_len, model_len)] += 1
+    else:
+      transition[index_m(model_len, model_len)]\
+        [index_d(model_len, model_len)] += 1
+    start = max(ref_start, start)
+    end = min(ref_end, end)
     pool = []
     for i in xrange(start, end):
       if not (consensus_states[i] == 1 and data[name][i] == '-'):
@@ -203,56 +213,71 @@ def main():
   # 6.1 transitions
   for i in xrange(1, model_len-1):
     # M_1~M_L-2
-    transition[index_m(model_len,i)][index_i(model_len,i)],\
-      transition[index_m(model_len,i)][index_m(model_len,i+1)],\
+    transition[index_m(model_len,i)][index_m(model_len,i+1)],\
+      transition[index_m(model_len,i)][index_i(model_len,i)],\
       transition[index_m(model_len,i)][index_d(model_len,i+1)],\
       transition[index_m(model_len,i)][index_d(model_len,model_len)]= \
-      three_prime_truncation_and_normalize(\
-        pseudo_count_and_normalize((\
-        transition[index_m(model_len,i)][index_i(model_len,i)],\
+      pseudo_count_and_normalize((\
         transition[index_m(model_len,i)][index_m(model_len,i+1)],\
-        transition[index_m(model_len,i)][index_d(model_len,i+1)])), model_len, i)
+        transition[index_m(model_len,i)][index_i(model_len,i)],\
+        transition[index_m(model_len,i)][index_d(model_len,model_len)],\
+        transition[index_m(model_len,i)][index_d(model_len,model_len)]),\
+        (0.79, 0.1, 0.1, 0.01))
+      #three_prime_truncation_and_normalize(\
+      #  pseudo_count_and_normalize((\
+      #  transition[index_m(model_len,i)][index_i(model_len,i)],\
+      #  transition[index_m(model_len,i)][index_m(model_len,i+1)],\
+      #  transition[index_m(model_len,i)][index_d(model_len,i+1)])), model_len, i)
 
     # I_1~I_L-2
-    transition[index_i(model_len,i)][index_i(model_len,i)],\
-      transition[index_i(model_len,i)][index_m(model_len,i+1)],\
+    transition[index_i(model_len,i)][index_m(model_len,i+1)],\
+      transition[index_i(model_len,i)][index_i(model_len,i)],\
       transition[index_i(model_len,i)][index_d(model_len,i+1)] = \
       pseudo_count_and_normalize((\
-        transition[index_i(model_len,i)][index_i(model_len,i)],\
         transition[index_i(model_len,i)][index_m(model_len,i+1)],\
-        transition[index_i(model_len,i)][index_d(model_len,i+1)]))
+        transition[index_i(model_len,i)][index_i(model_len,i)],\
+        transition[index_i(model_len,i)][index_d(model_len,i+1)]),\
+        (0.7, 0.2, 0.1))
 
     if i > 1:
       # D_2~D_L-2
-      transition[index_d(model_len,i)][index_i(model_len,i)],\
-        transition[index_d(model_len,i)][index_m(model_len,i+1)],\
+      transition[index_d(model_len,i)][index_m(model_len,i+1)],\
+        transition[index_d(model_len,i)][index_i(model_len,i)],\
         transition[index_d(model_len,i)][index_d(model_len,i+1)] = \
         pseudo_count_and_normalize((\
-          transition[index_d(model_len,i)][index_i(model_len,i)],\
           transition[index_d(model_len,i)][index_m(model_len,i+1)],\
-          transition[index_d(model_len,i)][index_d(model_len,i+1)]))
+          transition[index_d(model_len,i)][index_i(model_len,i)],\
+          transition[index_d(model_len,i)][index_d(model_len,i+1)]),\
+          (0.8, 0.1, 0.1))
 
   # M_L-1
-  transition[index_m(model_len,model_len-1)][index_i(model_len,model_len-1)],\
-    transition[index_m(model_len,model_len-1)][index_m(model_len,model_len)],\
+  transition[index_m(model_len,model_len-1)][index_m(model_len,model_len)],\
+    transition[index_m(model_len,model_len-1)][index_i(model_len,model_len-1)],\
     transition[index_m(model_len,model_len-1)][index_d(model_len,model_len)] = \
-    three_prime_truncation_and_normalize(\
-      pseudo_count_and_normalize((\
+    pseudo_count_and_normalize((\
+      transition[index_m(model_len,model_len-1)][index_m(model_len,model_len)],\
       transition[index_m(model_len,model_len-1)][index_i(model_len,model_len-1)],\
-      transition[index_m(model_len,model_len-1)][index_m(model_len,model_len)])),\
-      model_len, i)
+      transition[index_m(model_len,model_len-1)][index_d(model_len,model_len)]),\
+      (0.8, 0.1, 0.1))
+    #three_prime_truncation_and_normalize(\
+    #  pseudo_count_and_normalize((\
+    #  transition[index_m(model_len,model_len-1)][index_i(model_len,model_len-1)],\
+    #  transition[index_m(model_len,model_len-1)][index_m(model_len,model_len)])),\
+    #  model_len, i)
   # I_L-1
-  transition[index_i(model_len,model_len-1)][index_i(model_len,model_len-1)],\
-    transition[index_i(model_len,model_len-1)][index_m(model_len,model_len)] = \
+  transition[index_i(model_len,model_len-1)][index_m(model_len,model_len)],\
+    transition[index_i(model_len,model_len-1)][index_i(model_len,model_len-1)] = \
     pseudo_count_and_normalize((\
-    transition[index_i(model_len,model_len-1)][index_i(model_len,model_len-1)],\
-    transition[index_i(model_len,model_len-1)][index_m(model_len,model_len)]))
+    transition[index_i(model_len,model_len-1)][index_m(model_len,model_len)],\
+    transition[index_i(model_len,model_len-1)][index_i(model_len,model_len-1)]),\
+    (0.7, 0.3))
   # D_L-1
-  transition[index_d(model_len,model_len-1)][index_i(model_len,model_len-1)],\
-    transition[index_d(model_len,model_len-1)][index_m(model_len,model_len)] = \
+  transition[index_d(model_len,model_len-1)][index_m(model_len,model_len)],\
+    transition[index_d(model_len,model_len-1)][index_i(model_len,model_len-1)] = \
     pseudo_count_and_normalize((\
-    transition[index_d(model_len,model_len-1)][index_i(model_len,model_len-1)],\
-    transition[index_d(model_len,model_len-1)][index_m(model_len,model_len)]))
+    transition[index_d(model_len,model_len-1)][index_m(model_len,model_len)],\
+    transition[index_d(model_len,model_len-1)][index_i(model_len,model_len-1)]),\
+    (0.8, 0.2))
 
   # M_L
   transition[index_m(model_len,model_len)][index_d(model_len,model_len)] = 1.0
@@ -263,10 +288,10 @@ def main():
     (0.1, 0.9)
   transition[index_d(model_len,1)]\
     [index_m(model_len,1):index_m(model_len,model_len)+1] = \
-    [0.9] + [0.1/(model_len-1) for i in xrange(model_len-1)]
-    #pseudo_count_and_normalize(\
-    #  [min(0.01*i+0.02, 0.05) for i in xrange(model_len-1)], True)
-    # just some crazy weight function
+    pseudo_count_and_normalize(\
+    transition[index_d(model_len,1)]\
+    [index_m(model_len,1):index_m(model_len,model_len)+1],\
+    [0.6] + [0.4/(model_len-1) for i in xrange(model_len-1)])
   transition[index_i(model_len,0)][index_i(model_len,0)], \
     transition[index_i(model_len,0)][index_d(model_len,1)], \
     transition[index_i(model_len,0)][total_size-1] = (0.7, 0.2, 0.1)
@@ -302,7 +327,7 @@ def main():
   # 8. output
   outfh = open(opt.outfile, 'w')
   outfh.write("# Model length: %d\n"%model_len)
-  consensus_seq = get_consensus(data, consensus_states)
+  consensus_seq = get_consensus(emission)
   consensus_seq_wrapped = "\n#".join(\
     [consensus_seq[i:i+50] for i in xrange(0,len(consensus_seq), 50)])
   outfh.write("#%s\n"%consensus_seq_wrapped)

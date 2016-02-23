@@ -39,38 +39,30 @@ public:
       std::vector<std::pair<char, size_t> > &trace) const;
 
   void
-  forward_algorithm(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
-      const std::vector<int> &observation);
-
-  double
-  forward_prob(const char state, const size_t state_idx,
-      const size_t obs_pos) const;
-
-  void
-  backward_algorithm(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
-      const std::vector<int> &observation);
-
-  double
-  backward_prob(const char state, const size_t state_idx,
-      const size_t obs_pos) const;
-
-  void
   BW_training(const bool VERBOSE,
       std::vector<std::vector<double> > &transition,
       std::vector<std::vector<double> > &emission,
       const std::vector<int> &observation);
 
   void
-  sample_sequence(const bool VERBOSE,
+  SampleSequence(const bool VERBOSE,
       const gsl_rng* rng,
       const std::vector<std::vector<double> > &transition,
       const std::vector<std::vector<double> > &emission,
       std::vector<int> &seq,
       std::vector<size_t> &states) const;
+
+  void
+  PosteriorDecoding(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<int> &observation,
+      std::vector<size_t> &states);
+
+  double
+  PosteriorProb(const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<int> &observation);
 
 private:
   double
@@ -82,8 +74,11 @@ private:
   double
   log_sum_log(const double p, const double q) const;
 
-  double
-  max_item(const std::initializer_list<double> list) const;
+  size_t
+  argmax_list(const std::initializer_list<double> list) const;
+
+  size_t
+  argmax_vec(const std::vector<double> v) const;
 
   size_t
   index_m(const size_t idx) const;
@@ -94,14 +89,31 @@ private:
   size_t
   index_d(const size_t idx) const;
 
+  void
+  forward_algorithm(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<int> &observation,
+      std::vector<std::vector<double> > &fm,
+      std::vector<std::vector<double> > &fi,
+      std::vector<std::vector<double> > &fd);
+
+  void
+  backward_algorithm(const bool VERBOSE,
+      const std::vector<std::vector<double> > &transition,
+      const std::vector<std::vector<double> > &emission,
+      const std::vector<int> &observation,
+      std::vector<std::vector<double> > &bm,
+      std::vector<std::vector<double> > &bi,
+      std::vector<std::vector<double> > &bd);
+
   size_t model_len;
-  // use a very small value as -Inf
   const double LOG_ZERO = -1e7;
   const size_t total_size = model_len * 3 + 2;
-  std::vector<std::vector<double> > fm, fi, fd;
-  std::vector<std::vector<double> > bm, bi, bd;
   const double tolerance = 1e-10;
   const size_t max_iterations = 100;
+  std::vector<std::vector<double> > all_fm, all_fi, all_fd;
+  std::vector<std::vector<double> > all_bm, all_bi, all_bd;
 };
 
 #endif

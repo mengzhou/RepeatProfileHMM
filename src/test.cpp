@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "ProfileHMM.hpp"
+#include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 
@@ -69,6 +70,24 @@ print_matrix(const vector<vector<T> > &matrix, const size_t offset = 0,
       cout << "\t" << sum << endl;
     else
       cout << endl;
+  }
+}
+
+void
+seq_to_int(const string &seq, vector<int> &observation) {
+  for (string::const_iterator i = seq.begin(); i < seq.end(); ++i) {
+    if (*i == 'A' || *i == 'a')
+      observation.push_back(0);
+    else if (*i == 'C' || *i == 'c')
+      observation.push_back(1);
+    else if (*i == 'G' || *i == 'g')
+      observation.push_back(2);
+    else if (*i == 'T' || *i == 't')
+      observation.push_back(3);
+    else {
+      // no rng version
+      observation.push_back('A');
+    }
   }
 }
 
@@ -123,6 +142,7 @@ state_to_trace(const vector<size_t> &states,
     vector<pair<char, size_t> > &trace) {
   char state;
   size_t idx;
+  trace.clear();
   for (vector<size_t>::const_iterator i = states.begin();
       i < states.end(); ++i) {
     if (*i <= model_len) {
@@ -378,6 +398,34 @@ make_hmm_parameter(const bool VERBOSE, const gsl_rng* rng,
   }
 }
 
+void identify_repeats(const vector<vector<double> > &transition,
+    const vector<vector<double> > &emission,
+    const vector<int> &observation,
+    const vector<size_t> &states,
+    ProfileHMM &hmm,
+    const string chr_name,
+    vector<GenomicRegion> &coordinates) {
+  const size_t model_len = (transition.size() - 1)/3;
+  const size_t bg_state = index_i(model_len, 0);
+  vector<size_t>::const_iterator i = states.begin();
+  size_t start = 0, end = 0;
+  for (;i < states.end() - 1; ++i) {
+    vector<size_t>::const_iterator j = next(i);
+    if (*i == bg_state && *j != bg_state)
+      start = j - states.begin();
+    else if (*i != bg_state && *j == bg_state) {
+      end = j - states.begin();
+      const vector<int> obs(observation.begin() + start,
+        observation.begin() + end);
+      double score =
+        hmm.PosteriorProb(transition, emission, obs) - log(end - start);
+      GenomicRegion new_copy(chr_name, start,
+        end, "X", score, '+');
+      coordinates.push_back(new_copy);
+    }
+  }
+}
+
 int
 main (int argc, const char **argv) {
   bool VERBOSE = false;
@@ -435,11 +483,23 @@ main (int argc, const char **argv) {
       input_seq = input;
     }
     vector<pair<char, size_t> > trace;
+    vector<size_t> states;
     vector<int> observation;
     seq_to_int(rng, input_seq, observation);
-    const double lh = 
-    hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
-    print_trace(trace);
+    //const double lh = 
+    //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
+    //print_trace(trace);
+    hmm.PosteriorDecoding(VERBOSE, transition, emission, observation, states);
+    //state_to_trace(states, model_len, trace);
+    //print_trace(trace);
+    vector<GenomicRegion> coordinates;
+    identify_repeats(transition, emission, observation, states,
+      hmm, "chrF", coordinates);
+    for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
+      i < coordinates.end(); ++i)
+    {
+      cout << (*i) << endl;
+    }
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {
@@ -448,7 +508,7 @@ main (int argc, const char **argv) {
       vector<size_t> states;
       vector<int> seq;
       string output;
-      hmm.sample_sequence(VERBOSE, rng, transition, emission, seq, states);
+      hmm.SampleSequence(VERBOSE, rng, transition, emission, seq, states);
       cout << "#Trial " << i << endl;
       int_to_seq(seq, output);
       cout << "  Sampled seq:\t" << output << endl;
