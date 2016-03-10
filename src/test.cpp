@@ -171,7 +171,7 @@ load_hmm_parameter(const bool VERBOSE,
     const string &input_file,
     vector<vector<double> > &transition,
     vector<vector<double> > &emission,
-    const size_t model_len) {
+    size_t &model_len) {
   /* Format of input file:
    transition_value1 transition_value2 ...
    //
@@ -196,6 +196,7 @@ load_hmm_parameter(const bool VERBOSE,
     }
     getline(in, line);
   }
+  model_len = (transition.size() - 2) / 3;
   assert(emission.empty());
   getline(in, line);
   while (!line.empty() && line.compare("//")) {
@@ -419,8 +420,9 @@ void identify_repeats(const vector<vector<double> > &transition,
         observation.begin() + end);
       double score =
         hmm.PosteriorProb(transition, emission, obs) - log(end - start);
+      string name = score > 50 ? "COPY" : "X";
       GenomicRegion new_copy(chr_name, start,
-        end, "X", score, '+');
+        end, name, score, '+');
       coordinates.push_back(new_copy);
     }
   }
@@ -466,6 +468,7 @@ main (int argc, const char **argv) {
     write_hmm_parameter(VERBOSE, out_par, transition, emission);
 
   ProfileHMM hmm(model_len);
+  vector<string> chrom_names, ref_chroms;
   // decoding test
   if (!input.empty()) {
     if (VERBOSE) {
@@ -475,7 +478,6 @@ main (int argc, const char **argv) {
     const string suffix(input.substr(input.find_last_of(".")+1));
     string input_seq;
     if (suffix.compare("fa") == 0) {
-      vector<string> chrom_names, ref_chroms;
       read_fasta_file(input, chrom_names, ref_chroms);
       input_seq = ref_chroms[0];
     }
@@ -494,7 +496,7 @@ main (int argc, const char **argv) {
     //print_trace(trace);
     vector<GenomicRegion> coordinates;
     identify_repeats(transition, emission, observation, states,
-      hmm, "chrF", coordinates);
+      hmm, chrom_names[0], coordinates);
     for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
       i < coordinates.end(); ++i)
     {

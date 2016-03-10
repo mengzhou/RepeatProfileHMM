@@ -19,6 +19,7 @@ bin/
 
 # no binaries
 test
+construct
 
 # no other testing stuff
 *.params

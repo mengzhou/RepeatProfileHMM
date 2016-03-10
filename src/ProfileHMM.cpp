@@ -43,7 +43,7 @@ random_weighted_sample(const gsl_rng* rng, const vector<double> &prob) {
 }
 
 inline double
-ProfileHMM::log_sum_log(const double p, const double q) const {
+ProfileHMM::log_sum_log(const double p, const double q) {
   if (p == 0) {return q;}
   else if (q == 0) {return p;}
   const double larger = (p > q) ? p : q;
@@ -52,7 +52,7 @@ ProfileHMM::log_sum_log(const double p, const double q) const {
 }
 
 inline size_t
-ProfileHMM::argmax_list(const std::initializer_list<double> list) const {
+ProfileHMM::argmax_list(const std::initializer_list<double> &list) {
   const vector<double> v(list);
   const vector<double>::const_iterator x = 
      std::max_element(v.begin(), v.end());
@@ -60,14 +60,14 @@ ProfileHMM::argmax_list(const std::initializer_list<double> list) const {
 }
 
 inline size_t
-ProfileHMM::argmax_vec(const vector<double> v) const {
+ProfileHMM::argmax_vec(const vector<double> &v) {
   const vector<double>::const_iterator x = 
      std::max_element(v.begin(), v.end());
   return x - v.begin();
 }
 
 inline double
-ProfileHMM::log_sum_log_list(const std::initializer_list<double> list) const {
+ProfileHMM::log_sum_log_list(const std::initializer_list<double> &list) {
   const vector<double> vals(list);
   const vector<double>::const_iterator x = 
     std::max_element(vals.begin(), vals.end());
@@ -75,21 +75,6 @@ ProfileHMM::log_sum_log_list(const std::initializer_list<double> list) const {
   const size_t max_idx = x - vals.begin();
   double sum = 1.0;
   for (size_t i = 0; i < vals.size(); ++i) {
-    if (i != max_idx) {
-      sum += exp(vals[i] - max_val);
-    }
-  }
-  return max_val + log(sum);
-}
-
-inline double
-ProfileHMM::log_sum_log_vec(const vector<double> &vals, size_t limit) const {
-  const vector<double>::const_iterator x = 
-    std::max_element(vals.begin(), vals.begin() + limit);
-  const double max_val = *x;
-  const size_t max_idx = x - vals.begin();
-  double sum = 1.0;
-  for (size_t i = 0; i < limit; ++i) {
     if (i != max_idx) {
       sum += exp(vals[i] - max_val);
     }
@@ -465,7 +450,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
       list.push_back(fm[k][i]
         + transition[index_m(k)][index_d(model_len)]);
     }
-    fd[model_len-1][i] = log_sum_log_vec(list, list.size());
+    fd[model_len-1][i] = smithlab::log_sum_log_vec(list, list.size());
     // I_0
     fi[0][i] = log_sum_log_list({
       fi[0][i-1] + transition[index_i(0)][index_i(0)],
@@ -543,7 +528,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
       list.push_back(bm[k][i+1] + transition[index_d(1)][index_m(k)]
         + emission[index_m(k)][observation[i]]
         - emission[index_i(0)][observation[i]]);
-    bd[0][i] = log_sum_log_vec(list, list.size());
+    bd[0][i] = smithlab::log_sum_log_vec(list, list.size());
     // D_L-1
     bd[model_len-2][i] = log_sum_log(
       bm[model_len][i+1]
@@ -705,7 +690,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
       list.push_back(all_fi[0][i] + transition[index_i(0)][index_d(1)]
         + all_bd[0][i]);
     }
-    e_trans[index_i(0)][index_d(1)] = log_sum_log_vec(list, list.size())
+    e_trans[index_i(0)][index_d(1)] = smithlab::log_sum_log_vec(list, list.size())
       - ll;
     list.clear();
     for (size_t i = 1; i < seq_len; ++i) {
@@ -713,7 +698,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
       list.push_back(all_fi[0][i] + transition[index_i(0)][index_i(0)]
         + all_bi[0][i+1]);
     }
-    e_trans[index_i(0)][index_i(0)] = log_sum_log_vec(list, list.size())
+    e_trans[index_i(0)][index_i(0)] = smithlab::log_sum_log_vec(list, list.size())
       - ll;
     list.clear();
     e_trans[index_i(0)][total_size-1] =
@@ -726,7 +711,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
           - emission[index_i(0)][observation[i]]
           + all_bm[j][i+1]);
       }
-      e_trans[index_d(1)][index_m(j)] = log_sum_log_vec(list, list.size()) - ll;
+      e_trans[index_d(1)][index_m(j)] = smithlab::log_sum_log_vec(list, list.size()) - ll;
       list.clear();
     }
     // D_L to I_0 and E
@@ -736,7 +721,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bi[0][i+1]);
     }
     e_trans[index_d(model_len)][index_i(0)] =
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     e_trans[index_d(model_len)][total_size-1] =
       all_fd[model_len-1][seq_len] + transition[index_d(model_len)][total_size-1]
@@ -750,7 +735,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bm[model_len][i+1]);
     }
     e_trans[index_d(model_len-1)][index_m(model_len)] =
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     for (size_t i = 0; i < seq_len; ++i) {
       list.push_back(all_fd[model_len-2][i]
@@ -760,7 +745,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bi[model_len-1][i+1]);
     }
     e_trans[index_d(model_len-1)][index_i(model_len-1)] =
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     // I_L-1 to I_L-1 and M_L-1
     for (size_t i = 1; i < seq_len; ++i) {
@@ -771,7 +756,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bi[model_len-1][i+1]);
     }
     e_trans[index_i(model_len-1)][index_i(model_len-1)] = 
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     for (size_t i = 1; i < seq_len; ++i) {
       list.push_back(all_fi[model_len-1][i]
@@ -781,7 +766,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bm[model_len][i+1]);
     }
     e_trans[index_i(model_len-1)][index_m(model_len)] =
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     // M_L-1 to I_L-1, M_L and D_L
     for (size_t i = 1; i < seq_len; ++i) {
@@ -792,7 +777,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bi[model_len-1][i+1]);
     }
     e_trans[index_m(model_len-1)][index_i(model_len-1)] = 
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     for (size_t i = 1; i < seq_len; ++i) {
       list.push_back(all_fm[model_len-1][i]
@@ -802,7 +787,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bm[model_len][i+1]);
     }
     e_trans[index_m(model_len-1)][index_m(model_len)] = 
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     for (size_t i = 1; i <= seq_len; ++i) {
       list.push_back(all_fm[model_len-1][i]
@@ -810,7 +795,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         + all_bd[model_len-1][i]);
     }
     e_trans[index_m(model_len-1)][index_d(model_len)] = 
-      log_sum_log_vec(list, list.size()) - ll;
+      smithlab::log_sum_log_vec(list, list.size()) - ll;
     list.clear();
     // M_L to D_L is always 1, so no need to learn
     // general
@@ -833,11 +818,11 @@ ProfileHMM::BW_training(const bool VERBOSE,
           + all_bd[j][i]);
       }
       e_trans[index_i(j)][index_i(j)] =
-        log_sum_log_vec(list_i, list_i.size()) - ll;
+        smithlab::log_sum_log_vec(list_i, list_i.size()) - ll;
       e_trans[index_i(j)][index_m(j+1)] =
-        log_sum_log_vec(list_m, list_m.size()) - ll;
+        smithlab::log_sum_log_vec(list_m, list_m.size()) - ll;
       e_trans[index_i(j)][index_d(j+1)] =
-        log_sum_log_vec(list_d, list_d.size()) - ll;
+        smithlab::log_sum_log_vec(list_d, list_d.size()) - ll;
       list_i.clear();
       list_m.clear();
       list_d.clear();
@@ -861,13 +846,13 @@ ProfileHMM::BW_training(const bool VERBOSE,
           + all_bd[model_len-1][i]);
       }
       e_trans[index_m(j)][index_i(j)] =
-        log_sum_log_vec(list_i, list_i.size()) - ll;
+        smithlab::log_sum_log_vec(list_i, list_i.size()) - ll;
       e_trans[index_m(j)][index_m(j+1)] =
-        log_sum_log_vec(list_m, list_m.size()) - ll;
+        smithlab::log_sum_log_vec(list_m, list_m.size()) - ll;
       e_trans[index_m(j)][index_d(j+1)] =
-        log_sum_log_vec(list_d, list_d.size()) - ll;
+        smithlab::log_sum_log_vec(list_d, list_d.size()) - ll;
       e_trans[index_m(j)][index_d(model_len)] =
-        log_sum_log_vec(list_l, list_l.size()) - ll;
+        smithlab::log_sum_log_vec(list_l, list_l.size()) - ll;
       list_i.clear();
       list_m.clear();
       list_d.clear();
@@ -892,11 +877,11 @@ ProfileHMM::BW_training(const bool VERBOSE,
             + all_bd[j][i]);
         }
         e_trans[index_d(j)][index_m(j+1)] =
-          log_sum_log_vec(list_m, list_m.size()) - ll;
+          smithlab::log_sum_log_vec(list_m, list_m.size()) - ll;
         e_trans[index_d(j)][index_i(j)] = 
-          log_sum_log_vec(list_i, list_i.size()) - ll;
+          smithlab::log_sum_log_vec(list_i, list_i.size()) - ll;
         e_trans[index_d(j)][index_d(j+1)] =
-          log_sum_log_vec(list_d, list_d.size()) - ll;
+          smithlab::log_sum_log_vec(list_d, list_d.size()) - ll;
         list_m.clear();
         list_i.clear();
         list_d.clear();
@@ -914,7 +899,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
       }
       for (size_t k = 0; k < 4; ++k) {
         e_emiss[index_i(j)][k] =
-          log_sum_log_vec(list_emis[k], list_emis[k].size()) - ll;
+          smithlab::log_sum_log_vec(list_emis[k], list_emis[k].size()) - ll;
       }
     }
     list_emis.resize(4, vector<double>(1, log(0.01)));
@@ -925,7 +910,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
       }
       for (size_t k = 0; k < 4; ++k) {
         e_emiss[index_m(j)][k] =
-          log_sum_log_vec(list_emis[k], list_emis[k].size()) - ll;
+          smithlab::log_sum_log_vec(list_emis[k], list_emis[k].size()) - ll;
       }
     }
 
@@ -951,7 +936,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
     vector<double>::const_iterator last = e_trans[index_d(1)].begin()
       + index_m(model_len);
     vector<double> sum_list(first, last);
-    sum = log_sum_log_vec(sum_list, sum_list.size());
+    sum = smithlab::log_sum_log_vec(sum_list, sum_list.size());
     for (size_t i = 1; i <= model_len; ++i) {
       transition[index_d(1)][index_m(i)] = e_trans[index_d(1)][index_m(i)]
         - sum;
@@ -1042,7 +1027,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
           }
           list_i.erase(list_i.begin() + k);
           emission[index_i(j)][k] = e_emiss[index_i(j)][k]
-            - log_sum_log_vec(list_i, list_i.size());
+            - smithlab::log_sum_log_vec(list_i, list_i.size());
         }
         list_i.clear();
         for (size_t l = 0; l < 4; ++l) {
@@ -1050,7 +1035,7 @@ ProfileHMM::BW_training(const bool VERBOSE,
         }
         list_m.erase(list_m.begin() + k);
         emission[index_m(j)][k] = e_emiss[index_m(j)][k]
-          - log_sum_log_vec(list_m, list_m.size());
+          - smithlab::log_sum_log_vec(list_m, list_m.size());
         list_m.clear();
       }
     }
@@ -1083,7 +1068,7 @@ ProfileHMM::SampleSequence(const bool VERBOSE,
   while (idx < total_size - 1) {
     idx = random_weighted_sample(rng, transition[idx]);
     states.push_back(idx);
-    if (exp(log_sum_log_vec(emission[idx], emission[idx].size())) - 1.0
+    if (exp(smithlab::log_sum_log_vec(emission[idx], emission[idx].size())) - 1.0
       > -tolerance) {
       seq.push_back(static_cast<int>(
             random_weighted_sample(rng, emission[idx])));

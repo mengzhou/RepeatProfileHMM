@@ -31,6 +31,18 @@ class ProfileHMM {
 public:
   ProfileHMM(const size_t ml) : model_len(ml) {}
 
+  static double
+  log_sum_log_list(const std::initializer_list<double> &list);
+
+  static double
+  log_sum_log(const double p, const double q);
+
+  static size_t
+  argmax_list(const std::initializer_list<double> &list);
+
+  static size_t
+  argmax_vec(const std::vector<double> &v);
+
   double
   ViterbiDecoding(const bool VERBOSE,
       const std::vector<std::vector<double> > &transition,
@@ -65,21 +77,6 @@ public:
       const std::vector<int> &observation);
 
 private:
-  double
-  log_sum_log_list(const std::initializer_list<double> list) const;
-
-  double
-  log_sum_log_vec(const std::vector<double> &vals, size_t limit) const;
-
-  double
-  log_sum_log(const double p, const double q) const;
-
-  size_t
-  argmax_list(const std::initializer_list<double> list) const;
-
-  size_t
-  argmax_vec(const std::vector<double> v) const;
-
   size_t
   index_m(const size_t idx) const;
 

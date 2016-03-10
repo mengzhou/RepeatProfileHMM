@@ -7,7 +7,7 @@ all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
 endif
 
-PROGS = test
+PROGS = test construct
 
 CXX = /home/rcf-40/mengzhou/panfs/tools/gcc-5.3.0/bin/g++
 CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -static-libstdc++
@@ -45,8 +45,11 @@ install: $(PROGS)
 	@mkdir -p $(SRC_ROOT)/bin
 	@install -m 755 $(PROGS) $(SRC_ROOT)/bin
 
-$(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o OptionParser.o GenomicRegion.o)\
+#$(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o OptionParser.o GenomicRegion.o)\
   ProfileHMM.o
+test: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o OptionParser.o GenomicRegion.o)\
+  ProfileHMM.o
+construct: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o OptionParser.o)
 
 %.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $< $(INCLUDEARGS)

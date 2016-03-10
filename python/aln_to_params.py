@@ -3,7 +3,7 @@ from optparse import OptionParser
 import sys
 from math import log
 
-LOG_ZERO = -1000.0
+LOG_ZERO = -1e6
 
 def index_m(model_len, idx):
   # M_0 ~ M_L
@@ -237,7 +237,7 @@ def main():
         transition[index_i(model_len,i)][index_m(model_len,i+1)],\
         transition[index_i(model_len,i)][index_i(model_len,i)],\
         transition[index_i(model_len,i)][index_d(model_len,i+1)]),\
-        (0.7, 0.2, 0.1))
+        (0.5, 0.4, 0.1))
 
     if i > 1:
       # D_2~D_L-2
@@ -248,7 +248,7 @@ def main():
           transition[index_d(model_len,i)][index_m(model_len,i+1)],\
           transition[index_d(model_len,i)][index_i(model_len,i)],\
           transition[index_d(model_len,i)][index_d(model_len,i+1)]),\
-          (0.8, 0.1, 0.1))
+          (0.7, 0.1, 0.2))
 
   # M_L-1
   transition[index_m(model_len,model_len-1)][index_m(model_len,model_len)],\
@@ -270,14 +270,14 @@ def main():
     pseudo_count_and_normalize((\
     transition[index_i(model_len,model_len-1)][index_m(model_len,model_len)],\
     transition[index_i(model_len,model_len-1)][index_i(model_len,model_len-1)]),\
-    (0.7, 0.3))
+    (0.6, 0.4))
   # D_L-1
   transition[index_d(model_len,model_len-1)][index_m(model_len,model_len)],\
     transition[index_d(model_len,model_len-1)][index_i(model_len,model_len-1)] = \
     pseudo_count_and_normalize((\
     transition[index_d(model_len,model_len-1)][index_m(model_len,model_len)],\
     transition[index_d(model_len,model_len-1)][index_i(model_len,model_len-1)]),\
-    (0.8, 0.2))
+    (0.7, 0.3))
 
   # M_L
   transition[index_m(model_len,model_len)][index_d(model_len,model_len)] = 1.0
@@ -291,7 +291,7 @@ def main():
     pseudo_count_and_normalize(\
     transition[index_d(model_len,1)]\
     [index_m(model_len,1):index_m(model_len,model_len)+1],\
-    [0.6] + [0.4/(model_len-1) for i in xrange(model_len-1)])
+    [0.5] + [0.5/(model_len-1) for i in xrange(model_len-1)])
   transition[index_i(model_len,0)][index_i(model_len,0)], \
     transition[index_i(model_len,0)][index_d(model_len,1)], \
     transition[index_i(model_len,0)][total_size-1] = (0.7, 0.2, 0.1)
