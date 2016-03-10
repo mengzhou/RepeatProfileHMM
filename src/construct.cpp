@@ -650,7 +650,8 @@ main (int argc, const char **argv) {
           transition[curr_i.index(model_len)][curr_i.index(model_len)],
           transition[curr_i.index(model_len)][next_d.index(model_len)]
           });
-      prior = vector<double>(tran_prior[1].begin(), tran_prior[1].end()-1);
+      prior = tran_prior[1];
+      prior.erase(prior.begin() + 3);
       log_transform_vec(prior);
       row = combine_normalize(row, prior, true);
       transition[curr_i.index(model_len)][next_m.index(model_len)] = row[0];
@@ -663,7 +664,8 @@ main (int argc, const char **argv) {
             transition[curr_d.index(model_len)][curr_i.index(model_len)],
             transition[curr_d.index(model_len)][next_d.index(model_len)]
             });
-        prior = vector<double>(tran_prior[2].begin(), tran_prior[2].end()-1);
+        prior = tran_prior[2];
+        prior.erase(prior.begin() + 3);
         log_transform_vec(prior);
         row = combine_normalize(row, prior, true);
         transition[curr_d.index(model_len)][next_m.index(model_len)] = row[0];
@@ -683,7 +685,7 @@ main (int argc, const char **argv) {
     prior = tran_prior[0];
     prior.erase(prior.begin() + 2); // no next_d
     log_transform_vec(prior);
-    prior[2] = get_3prime_truncation_prior(model_len, idx);
+    prior.back() = get_3prime_truncation_prior(model_len, idx);
     row = combine_normalize(row, prior, true);
     transition[curr_m.index(model_len)][next_m.index(model_len)] = row[0];
     transition[curr_m.index(model_len)][curr_i.index(model_len)] = row[1];
@@ -709,20 +711,18 @@ main (int argc, const char **argv) {
         transition[curr_d.index(model_len)][next_m.index(model_len)],
         transition[curr_d.index(model_len)][curr_i.index(model_len)]
         });
-    prior = tran_prior[1];
+    prior = tran_prior[2];
     prior.erase(prior.begin() + 2, prior.end()); // no next_d
     log_transform_vec(prior);
     row = combine_normalize(row, prior, true);
-    transition[curr_i.index(model_len)][next_m.index(model_len)] = row[0];
-    transition[curr_i.index(model_len)][curr_i.index(model_len)] = row[1];
+    transition[curr_d.index(model_len)][next_m.index(model_len)] = row[0];
+    transition[curr_d.index(model_len)][curr_i.index(model_len)] = row[1];
     // M_L
     transition[state(0ul, model_len, 0).index(model_len)]
       [right_end.index(model_len)] = 0.0;
     // M_0
-    transition[state(0ul, 0, 0).index(model_len)]
-      [left_end.index(model_len)] = log(0.05);
-    transition[state(0ul, 0, 0).index(model_len)]
-      [state(0ul, 0, 1).index(model_len)] = log(0.95);
+    transition[0][left_end.index(model_len)] = log(0.05);
+    transition[0][state(0ul, 0, 1).index(model_len)] = log(0.95);
     // D_1
     transition[left_end.index(model_len)] =
       normalize_vec(transition[left_end.index(model_len)], true);
@@ -737,12 +737,12 @@ main (int argc, const char **argv) {
     transition[state(0ul, 0, 1).index(model_len)]
       [state(0ul, 0, 1).index(model_len)] = log(0.8);
     transition[state(0ul, 0, 1).index(model_len)]
-      [right_end.index(model_len)] = log(0.18);
+      [left_end.index(model_len)] = log(0.18);
     transition[state(0ul, 0, 1).index(model_len)].back() = log(0.02);
     // D_L
-    transition[state(0ul, model_len, 2).index(model_len)]
+    transition[right_end.index(model_len)]
       [state(0ul, 0, 1).index(model_len)] = log(0.98);
-    transition[state(0ul, model_len, 2).index(model_len)].back() = log(0.02);
+    transition[right_end.index(model_len)].back() = log(0.02);
 
     // 3.2 emissions
     prior = emis_prior[1];
