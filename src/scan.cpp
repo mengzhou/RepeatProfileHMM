@@ -142,9 +142,9 @@ void identify_repeats(const vector<vector<double> > &transition,
     vector<GenomicRegion> &coordinates) {
   const size_t model_len = (transition.size() - 1)/3;
   const size_t bg_state = state(0ul, 0, 1).index(model_len);
-  vector<size_t>::const_iterator i = states.begin();
   size_t start = 0, end = 0;
-  for (;i < states.end() - 1; ++i) {
+  for (vector<size_t>::const_iterator i = states.begin()
+      ;i < states.end() - 1; ++i) {
     vector<size_t>::const_iterator j = next(i);
     if (*i == bg_state && *j != bg_state)
       start = j - states.begin();
@@ -195,6 +195,10 @@ main (int argc, const char **argv) {
     }
     in_par = leftover_args.front();
 
+    std::ofstream of;
+    if (!out_file.empty()) of.open(out_file.c_str());
+    std::ostream out(out_file.empty() ? std::cout.rdbuf() : of.rdbuf());
+
     gsl_rng *rng;
     rng = gsl_rng_alloc(gsl_rng_default);
     gsl_rng_set(rng, seed);
@@ -210,30 +214,33 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[LOADING GENOME]" << endl;
     chrom_file_map chrom_files;
-    identify_and_read_chromosomes(chrom_file, fasta_suffix, chrom_files);
+    identify_chromosomes(chrom_file, fasta_suffix, chrom_files);
     if (VERBOSE)
       cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
 
-    ProfileHMM hmm(model_len);
 
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
-      cout << chrom->first << "\t" << chrom->second << endl;
-    }
-    /*
-    vector<int> observation;
-    seq_to_int(rng, input_seq, observation);
-    hmm.PosteriorDecoding(VERBOSE, transition, emission, observation, states);
+      string chr_seq;
+      read_fasta_file(chrom->second, chrom->first, chr_seq);
+      if (chr_seq.empty())
+        throw SMITHLABException("could not find chrom: " + chrom->first);
 
-    vector<GenomicRegion> coordinates;
-    identify_repeats(transition, emission, observation, states,
-      hmm, chrom_names[0], coordinates);
-    for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-      i < coordinates.end(); ++i)
-    {
-      cout << (*i) << endl;
+      vector<int> observation;
+      vector<size_t> states;
+      seq_to_int(rng, chr_seq, observation);
+      ProfileHMM hmm(model_len);
+      hmm.PosteriorDecoding(false, transition, emission, observation, states);
+
+      vector<GenomicRegion> coordinates;
+      identify_repeats(transition, emission, observation, states,
+        hmm, chrom->first, coordinates);
+      for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
+        i < coordinates.end(); ++i)
+      {
+        out << (*i) << endl;
+      }
     }
-    */
   }
   catch (const SMITHLABException &e) {
     cerr << e.what() << endl;
