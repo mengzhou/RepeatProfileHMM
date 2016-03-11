@@ -24,12 +24,60 @@
 #include <algorithm>
 #include <vector>
 #include <iostream>
+#include <iomanip>
 
 using std::vector;
 using std::max;
 using std::pair;
 using std::endl;
 using std::cout;
+
+size_t
+baseint2stateint(const size_t &baseint,
+    const bool marked) {
+  if (marked && baseint < 4)
+    return 0;
+  else if (marked && baseint == 4)
+    return 2;
+  else if (marked && baseint == 5)
+    return 3; // mark at outside of alignment, truncation
+  else if (!marked && baseint < 4)
+    return 1;
+  else
+    return 4; // gap in not marked column; this is not supposed to happen
+}
+
+state::state() {};
+
+state::state(const char b, const size_t i, const bool m) {
+  baseint = base2int(b);
+  idx = i;
+  stateint = baseint2stateint(base2int(b), m);
+}
+
+state::state(const state &obj) {
+  baseint = obj.baseint;
+  idx = obj.idx;
+  stateint = obj.stateint;
+}
+
+bool
+state::isvalid(void) const {
+  return (stateint < 2 && baseint < 4) 
+    || (stateint == 2 && baseint == 4);
+}
+
+size_t
+state::index(const size_t model_len) const {
+  if (stateint == 0)
+    return idx;
+  else if (stateint == 1)
+    return idx + model_len + 1;
+  else if (stateint == 2)
+    return idx + model_len * 2;
+  else
+    return 0;
+}
 
 size_t
 random_weighted_sample(const gsl_rng* rng, const vector<double> &prob) {
@@ -1136,4 +1184,96 @@ ProfileHMM::PosteriorProb(const vector<vector<double> > &transition,
   return log_sum_log(
     (*(tfi.begin())).back(),
     (tfd.back()).back() );
+}
+
+void
+print_transition(const vector<vector<double> > &transition) {
+  const size_t model_len = (transition.size() - 2) / 3;
+
+  cout << "#M_0->I_0, M_0->D_1 = "
+    << exp(transition[0][state(0ul, 0, 1).index(model_len)]) << ", "
+    << exp(transition[0][state(0ul, 1, 2).index(model_len)]) << endl;
+  cout << "#M_i:" 
+    << "\t" << "M->M" << "\t" << "M->I" << "\t" << "M->D"
+    << "\t" << "I->M" << "\t" << "I->I" << "\t" << "I->D"
+    << "\t" << "D->M" << "\t" << "D->I" << "\t" << "D->D"
+    << endl;
+  for (size_t i = 1; i < model_len; ++i) {
+    cout << i;
+    // M
+    cout << std::setprecision(4) << std::fixed
+      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
+        [state(0ul,i+1,0).index(model_len)])
+      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
+        [state(0ul,i,1).index(model_len)])
+      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
+        [state(0ul,i+1,2).index(model_len)]);
+    // I
+    cout << std::setprecision(4)
+      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
+        [state(0ul,i+1,0).index(model_len)])
+      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
+        [state(0ul,i,1).index(model_len)])
+      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
+        [state(0ul,i+1,2).index(model_len)]);
+    // D
+    if (i > 1)
+      cout << std::setprecision(4)
+        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
+          [state(0ul,i+1,0).index(model_len)])
+        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
+          [state(0ul,i,1).index(model_len)])
+        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
+          [state(0ul,i+1,2).index(model_len)]);
+    else
+      cout << "\tnan\tnan\tnan";
+    cout << endl;
+  }
+  cout << endl << "#LOG\tT->M\tM->T" << endl;
+  for (size_t i = 1; i <= model_len; ++i) {
+    cout << i << std::setprecision(2)
+      << "\t" << transition[state(0ul,1,2).index(model_len)]
+        [state(0ul, i, 0).index(model_len)]
+      << "\t" << transition[state(0ul,i,0).index(model_len)]
+        [state(0ul,model_len,2).index(model_len)]
+      << endl;
+  }
+}
+
+void
+print_emission(const vector<vector<double> > &emission) {
+  const size_t model_len = (emission.size() - 2) / 3;
+  cout << "#M_i:" 
+    << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
+  for (size_t i = 1; i < model_len; ++i) {
+    cout << i;
+    cout << std::setprecision(4) << std::fixed
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][0])
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][1])
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][2])
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][3])
+      << endl;
+  }
+
+  for (size_t i = 1; i <= model_len; ++i) {
+    cout << i;
+    cout << std::setprecision(4)
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][0])
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][1])
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][2])
+      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][3])
+      << endl;
+  }
+
+  cout << endl << "#I_i:" 
+    << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
+  for (size_t i = 0; i < model_len; ++i) {
+    cout << i;
+    cout << std::setprecision(4)
+      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][0])
+      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][1])
+      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][2])
+      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][3])
+      << endl;
+  }
 }

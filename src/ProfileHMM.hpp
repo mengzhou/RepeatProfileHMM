@@ -25,6 +25,24 @@
 #include <gsl/gsl_randist.h>
 #include "smithlab_utils.hpp"
 
+size_t
+baseint2stateint(const size_t &baseint, const bool marked);
+
+struct state {
+  state();
+  state(const size_t b, const size_t i, const size_t s) :
+    baseint(b), idx(i), stateint(s) {}
+  state(const char b, const size_t i, const bool m);
+  state(const state &obj);
+
+  size_t baseint;
+  size_t idx;
+  size_t stateint;
+
+  bool isvalid(void) const;
+  size_t index(const size_t model_len) const;
+};
+
 class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114 (bottom figure)
@@ -113,4 +131,9 @@ private:
   std::vector<std::vector<double> > all_bm, all_bi, all_bd;
 };
 
+void
+print_transition(const std::vector<std::vector<double> > &transition);
+
+void
+print_emission(const std::vector<std::vector<double> > &emission);
 #endif

@@ -20,6 +20,7 @@ bin/
 # no binaries
 test
 construct
+scan
 
 # no other testing stuff
 *.params

@@ -1,5 +1,5 @@
-/*    methcounts: a program for counting the methylated and
- *    unmethylated reads mapping over each CpG or C
+/*    construct: a program for constructing profile-HMM from multiple
+ *    sequence alignment
  *
  *    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
@@ -30,6 +30,8 @@
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
+#include "smithlab_os.hpp"
+#include "ProfileHMM.hpp"
 
 using std::vector;
 using std::pair;
@@ -80,21 +82,6 @@ log_transform_vec(vector<double> &v) {
 }
 
 size_t
-baseint2stateint(const size_t &baseint,
-    bool marked) {
-  if (marked && baseint < 4)
-    return 0;
-  else if (marked && baseint == 4)
-    return 2;
-  else if (marked && baseint == 5)
-    return 3; // mark at outside of alignment, truncation
-  else if (!marked && baseint < 4)
-    return 1;
-  else
-    return 4; // gap in not marked column; this is not supposed to happen
-}
-
-size_t
 argmax_vec(const vector<double> &v) {
   const vector<double>::const_iterator x = 
      max_element(v.begin(), v.end());
@@ -136,48 +123,12 @@ combine_normalize(const vector<double> &v1, const vector<double> &v2,
   return combined;
 }
 
-struct state {
-  state() {};
-  state(const size_t b, const size_t i, const size_t s) :
-    baseint(b), idx(i), stateint(s) {}
-  state(const char b, const size_t i, const bool m) {
-    baseint = base2int(b);
-    idx = i;
-    stateint = baseint2stateint(base2int(b), m);
-  }
-  state(const state &obj) {
-    baseint = obj.baseint;
-    idx = obj.idx;
-    stateint = obj.stateint;
-  }
-  size_t baseint;
-  size_t idx;
-  size_t stateint;
-
-  bool isvalid(void) const {
-    return (stateint < 2 && baseint < 4) 
-      || (stateint == 2 && baseint == 4);
-  }
-  size_t index(size_t model_len) const {
-    if (stateint == 0)
-      return idx;
-    else if (stateint == 1)
-      return idx + model_len + 1;
-    else if (stateint == 2)
-      return idx + model_len * 2;
-    else
-      return 0;
-  }
-};
-
 void
 load_alignment(bool VERBOSE, const string infile,
     unordered_map<string, string> &msa) {
   ifstream infs(infile.c_str());
   string line;
 
-  if (VERBOSE)
-    cout << "READING ALIGNMENT..." << endl;
   while (getline(infs, line)) {
     istringstream iss(line);
     string buffer, name, seq;
@@ -197,6 +148,8 @@ load_alignment(bool VERBOSE, const string infile,
       }
     }
   }
+  if (VERBOSE)
+    cerr << "\t" << msa.size() << " SEQUENCES LOADED." << endl;
 }
 
 void
@@ -410,111 +363,23 @@ write_hmm_parameter(const bool VERBOSE,
   out << "//" << endl;
 }
 
-void
-print_transition(const vector<vector<double> > &transition) {
-  const size_t model_len = (transition.size() - 2) / 3;
-
-  cout << "#M_0->I_0, M_0->D_1 = "
-    << exp(transition[0][state(0ul, 0, 1).index(model_len)]) << ", "
-    << exp(transition[0][state(0ul, 1, 2).index(model_len)]) << endl;
-  cout << "#M_i:" 
-    << "\t" << "M->M" << "\t" << "M->I" << "\t" << "M->D"
-    << "\t" << "I->M" << "\t" << "I->I" << "\t" << "I->D"
-    << "\t" << "D->M" << "\t" << "D->I" << "\t" << "D->D"
-    << "\t" << "M->T"
-    << endl;
-  for (size_t i = 1; i < model_len; ++i) {
-    cout << i;
-    // M
-    cout << std::setprecision(4) << std::fixed
-      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,i+1,0).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,i,1).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,i+1,2).index(model_len)]);
-    // I
-    cout << std::setprecision(4)
-      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
-        [state(0ul,i+1,0).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
-        [state(0ul,i,1).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
-        [state(0ul,i+1,2).index(model_len)]);
-    // D
-    if (i > 1)
-      cout << std::setprecision(4)
-        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
-          [state(0ul,i+1,0).index(model_len)])
-        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
-          [state(0ul,i,1).index(model_len)])
-        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
-          [state(0ul,i+1,2).index(model_len)]);
-    else
-      cout << "\tNaN\tNan\tNan";
-    // M to truncation
-    cout << "\t" << std::scientific
-      << transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,model_len,2).index(model_len)] << endl;
-  }
-  cout << endl << "\tT->M" << endl;
-  for (size_t i = 1; i <= model_len; ++i) {
-    cout << i << "\t" << transition[state(0ul,1,2).index(model_len)]
-      [state(0ul, i, 0).index(model_len)] << endl;
-  }
-}
-
-void
-print_emission(const vector<vector<double> > &emission) {
-  const size_t model_len = (emission.size() - 2) / 3;
-  cout << "#M_i:" 
-    << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
-  for (size_t i = 1; i < model_len; ++i) {
-    cout << i;
-    cout << std::setprecision(4) << std::fixed
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][0])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][1])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][2])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][3])
-      << endl;
-  }
-
-  for (size_t i = 1; i <= model_len; ++i) {
-    cout << i;
-    cout << std::setprecision(4)
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][0])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][1])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][2])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][3])
-      << endl;
-  }
-
-  cout << endl << "#I_i:" 
-    << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
-  for (size_t i = 0; i < model_len; ++i) {
-    cout << i;
-    cout << std::setprecision(4)
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][0])
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][1])
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][2])
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][3])
-      << endl;
-  }
-}
-
 int
 main (int argc, const char **argv) {
   try {
-    bool VERBOSE;
+    bool VERBOSE = false;
+    bool DEBUG = false;
+    bool USE_HEU = false;
     double lambda = 0.0;
     string outf;
 
-    OptionParser opt_parse(argv[0],
+    OptionParser opt_parse(strip_path(argv[0]),
         "Construct profile-HMM from multiple alignment.");
     opt_parse.add_opt("out", 'o', "Output parameters file.", false, outf);
     opt_parse.add_opt("lambda", 'l',
         "Model length adjusting parameter. Default: 0", false, lambda);
+    opt_parse.add_opt("heuristic", 'u', "Heuristic mode.", false, USE_HEU);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
+    opt_parse.add_opt("deubg", 'd', "Print debug information.", false, DEBUG);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -541,13 +406,14 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[FINDING OPTIMAL MATCH COLUMNS]" << endl;
     vector<bool> marked_cols((msa.begin()->second).length(), false);
-    //vector<bool> marked_heu((msa.begin()->second).length(), false);
     vector<vector<double> > tran_prior, emis_prior;
     set_transition_prior(tran_prior);
     set_emission_prior(emis_prior);
-    find_marked_cols_map(VERBOSE,
-        marked_cols, msa, tran_prior, emis_prior, lambda);
-    //find_marked_cols_heu(marked_heu, msa);
+    if (USE_HEU)
+      find_marked_cols_heu(marked_cols, msa);
+    else
+      find_marked_cols_map(VERBOSE,
+          marked_cols, msa, tran_prior, emis_prior, lambda);
     
     // 3. estimate probabilities for individual states
     if (VERBOSE)
@@ -763,9 +629,11 @@ main (int argc, const char **argv) {
     ostream out(outf.empty() ? cout.rdbuf() : outfs.rdbuf());
 
     write_hmm_parameter(VERBOSE, out, transition, emission);
+    if (VERBOSE)
+      cerr << "[DONE]" << endl;
 
     // display alignment and marked columns for debug purposes
-    if (VERBOSE) {
+    if (DEBUG) {
       for (unordered_map<string, string>::const_iterator i = msa.begin();
           i != msa.end(); ++i)
         cout << i->first << "\t" << i->second << endl;
@@ -777,14 +645,17 @@ main (int argc, const char **argv) {
           cout << " ";
       }
       cout << endl;
-      //cout << std::setw(25);
-      //for (size_t i = 0; i < marked_heu.size(); ++i) {
-      //  if (marked_heu[i])
-      //    cout << "#";
-      //  else
-      //    cout << " ";
-      //}
-      //cout << endl;
+      vector<bool> marked_heu((msa.begin()->second).length(), false);
+      find_marked_cols_map(VERBOSE,
+          marked_heu, msa, tran_prior, emis_prior, lambda);
+      cout << std::setw(25);
+      for (size_t i = 0; i < marked_heu.size(); ++i) {
+        if (marked_heu[i])
+          cout << "#";
+        else
+          cout << " ";
+      }
+      cout << endl;
 
       cout << "Transition:" << endl;
       print_transition(transition);
