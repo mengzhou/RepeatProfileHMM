@@ -85,8 +85,8 @@ seq_to_int(const gsl_rng* rng, const string &seq, vector<int> &observation) {
     
 void
 load_hmm_parameter(const string &input_file,
-    vector<vector<double> > &transition,
-    vector<vector<double> > &emission,
+    matrix &transition,
+    matrix &emission,
     size_t &model_len) {
   /* Format of input file:
    # some header
@@ -133,8 +133,8 @@ load_hmm_parameter(const string &input_file,
   assert(emission.size() == total_size);
 }
 
-void identify_repeats(const vector<vector<double> > &transition,
-    const vector<vector<double> > &emission,
+void identify_repeats(const matrix &transition,
+    const matrix &emission,
     const vector<int> &observation,
     const vector<size_t> &states,
     ProfileHMM &hmm,
@@ -203,11 +203,13 @@ main (int argc, const char **argv) {
     rng = gsl_rng_alloc(gsl_rng_default);
     gsl_rng_set(rng, seed);
 
-    vector<vector<double> > transition, emission;
+    matrix transition, emission;
     size_t model_len;
     if (VERBOSE)
       cerr << "[LOADING HMM]" << endl;
     load_hmm_parameter(in_par, transition, emission, model_len);
+    // use log-odds for emission
+    log_odds_transform(emission);
     if (VERBOSE)
       cerr << "\tMODEL LENGTH=" << model_len << endl;
 
@@ -229,8 +231,15 @@ main (int argc, const char **argv) {
       vector<int> observation;
       vector<size_t> states;
       seq_to_int(rng, chr_seq, observation);
+      matrix fm(model_len+1, vector<double>(observation.size()+1, LOG_ZERO));
+      matrix fi(model_len, vector<double>(observation.size()+1, LOG_ZERO));
+      matrix fd(model_len, vector<double>(observation.size()+1, LOG_ZERO));
+      matrix bm(model_len+1, vector<double>(observation.size()+1, LOG_ZERO));
+      matrix bi(model_len, vector<double>(observation.size()+1, LOG_ZERO));
+      matrix bd(model_len, vector<double>(observation.size()+1, LOG_ZERO));
       ProfileHMM hmm(model_len);
-      hmm.PosteriorDecoding(false, transition, emission, observation, states);
+      hmm.PosteriorDecoding(false, transition, emission, observation, states,
+          fm, fi, fd, bm, bi, bd);
 
       vector<GenomicRegion> coordinates;
       identify_repeats(transition, emission, observation, states,

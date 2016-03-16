@@ -55,9 +55,8 @@ log_sum_log(const double p, const double q) {
 }
 
 void
-log_transform_matrix(vector<vector<double> > &m) {
-  const double LOG_ZERO = -1e6;
-  for (vector<vector<double> >::iterator i = m.begin();
+log_transform_matrix(matrix &m) {
+  for (matrix::iterator i = m.begin();
       i < m.end(); ++i) {
     for (vector<double>:: iterator j = (*i).begin();
         j < (*i).end(); ++j) {
@@ -71,7 +70,6 @@ log_transform_matrix(vector<vector<double> > &m) {
 
 void
 log_transform_vec(vector<double> &v) {
-  const double LOG_ZERO = -1e6;
   for (vector<double>:: iterator i = v.begin();
       i < v.end(); ++i) {
     if (*i < 1e-6)
@@ -153,7 +151,7 @@ load_alignment(bool VERBOSE, const string infile,
 }
 
 void
-set_transition_prior(vector<vector<double> > &tran_prior) {
+set_transition_prior(matrix &tran_prior) {
   // dimensionality of transition prior:
   // 4x4 - M, I, D_i (internal deletion), D_1 (truncation)
   // M to M, I, D_i, D_1
@@ -167,7 +165,7 @@ set_transition_prior(vector<vector<double> > &tran_prior) {
 }
 
 void
-set_emission_prior(vector<vector<double> > &emis_prior) {
+set_emission_prior(matrix &emis_prior) {
   // dimensionality of emission prior:
   // 2x4 - M, I for each nucleotide A,C,G,T
   // M
@@ -209,7 +207,7 @@ get_3prime_truncation_prior(const size_t model_len,
 double
 posterior_transition_score(const unordered_map<string, string> &msa,
     const size_t start, const size_t end,
-    const vector<vector<double> > &tran_prior) {
+    const matrix &tran_prior) {
   // there are 3 types of states: M, I, D, so the number of possible
   // transitions between position start and end is 9=3x3.
   // index for states: M - 0, I - 1, D - 2 corresponding to the
@@ -290,11 +288,11 @@ void
 find_marked_cols_map(const bool VERBOSE,
     vector<bool> &marked,
     const unordered_map<string, string> &msa,
-    const vector<vector<double> > &tran_prior,
-    const vector<vector<double> > &emis_prior,
+    const matrix &tran_prior,
+    const matrix &emis_prior,
     const double lambda) {
   const size_t seq_len = marked.size();
-  vector<double> s(seq_len+2, -1e7);
+  vector<double> s(seq_len+2, LOG_ZERO);
   vector<size_t> trace_back(seq_len+2, 0);
   s[0] = 0.0;
 
@@ -339,11 +337,11 @@ find_marked_cols_heu(vector<bool> &marked,
 void
 write_hmm_parameter(const bool VERBOSE,
     ostream &out,
-    const vector<vector<double> > &transition,
-    const vector<vector<double> > &emission) {
+    const matrix &transition,
+    const matrix &emission) {
   const size_t model_len = (transition.size() - 2) / 3;
   out << "# Model length: " << model_len << endl;
-  for (vector<vector<double> >::const_iterator i = transition.begin();
+  for (matrix::const_iterator i = transition.begin();
       i < transition.end(); ++i) {
     for (vector<double>::const_iterator j = (*i).begin();
         j < (*i).end(); ++j) {
@@ -352,7 +350,7 @@ write_hmm_parameter(const bool VERBOSE,
     out << endl;
   }
   out << "//" << endl;
-  for (vector<vector<double> >::const_iterator i = emission.begin();
+  for (matrix::const_iterator i = emission.begin();
       i < emission.end(); ++i) {
     for (vector<double>::const_iterator j = (*i).begin();
         j < (*i).end(); ++j) {
@@ -406,7 +404,7 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[FINDING OPTIMAL MATCH COLUMNS]" << endl;
     vector<bool> marked_cols((msa.begin()->second).length(), false);
-    vector<vector<double> > tran_prior, emis_prior;
+    matrix tran_prior, emis_prior;
     set_transition_prior(tran_prior);
     set_emission_prior(emis_prior);
     if (USE_HEU)
@@ -418,7 +416,7 @@ main (int argc, const char **argv) {
     // 3. estimate probabilities for individual states
     if (VERBOSE)
       cerr << "[ESTIMATING PARAMETERS]" << endl;
-    vector<vector<double> > transition, emission;
+    matrix transition, emission;
     const size_t model_len =
       count(marked_cols.begin(), marked_cols.end(), true);
     transition.resize(model_len*3+2, vector<double>(model_len*3+2, 0.0));
@@ -646,8 +644,7 @@ main (int argc, const char **argv) {
       }
       cout << endl;
       vector<bool> marked_heu((msa.begin()->second).length(), false);
-      find_marked_cols_map(VERBOSE,
-          marked_heu, msa, tran_prior, emis_prior, lambda);
+      find_marked_cols_heu(marked_heu, msa);
       cout << std::setw(25);
       for (size_t i = 0; i < marked_heu.size(); ++i) {
         if (marked_heu[i])

@@ -249,7 +249,6 @@ make_hmm_parameter(const bool VERBOSE, const gsl_rng* rng,
   // M_0(B) ~ M_L + I_0 ~ I_L-1 + D_1 ~ D_L + E
   const size_t total_size = model_len * 3 + 2;
   const int alphabet_size = 4;
-  const double LOG_ZERO = -1000.0;
 
   // setting transition
   transition.resize(total_size);
@@ -488,10 +487,19 @@ main (int argc, const char **argv) {
     vector<size_t> states;
     vector<int> observation;
     seq_to_int(rng, input_seq, observation);
+    log_odds_transform(emission);
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
-    hmm.PosteriorDecoding(VERBOSE, transition, emission, observation, states);
+    const size_t seq_len = observation.size();
+    matrix fm(model_len+1, vector<double>(seq_len+1, LOG_ZERO));
+    matrix fi(model_len, vector<double>(seq_len+1, LOG_ZERO));
+    matrix fd(model_len, vector<double>(seq_len+1, LOG_ZERO));
+    matrix bm(model_len+1, vector<double>(seq_len+1, LOG_ZERO));
+    matrix bi(model_len, vector<double>(seq_len+1, LOG_ZERO));
+    matrix bd(model_len, vector<double>(seq_len+1, LOG_ZERO));
+    hmm.PosteriorDecoding(VERBOSE, transition, emission, observation, states,
+        fm, fi, fd, bm, bi, bd);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
     vector<GenomicRegion> coordinates;

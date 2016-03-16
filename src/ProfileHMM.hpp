@@ -25,6 +25,10 @@
 #include <gsl/gsl_randist.h>
 #include "smithlab_utils.hpp"
 
+typedef std::vector<std::vector<double> > matrix;
+
+extern const double LOG_ZERO;
+
 size_t
 baseint2stateint(const size_t &baseint, const bool marked);
 
@@ -63,35 +67,37 @@ public:
 
   double
   ViterbiDecoding(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
+      const matrix &transition,
+      const matrix &emission,
       const std::vector<int> &observation,
       std::vector<std::pair<char, size_t> > &trace) const;
 
   void
   BW_training(const bool VERBOSE,
-      std::vector<std::vector<double> > &transition,
-      std::vector<std::vector<double> > &emission,
+      matrix &transition,
+      matrix &emission,
       const std::vector<int> &observation);
 
   void
   SampleSequence(const bool VERBOSE,
       const gsl_rng* rng,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
+      const matrix &transition,
+      const matrix &emission,
       std::vector<int> &seq,
       std::vector<size_t> &states) const;
 
   void
   PosteriorDecoding(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
+      const matrix &transition,
+      const matrix &emission,
       const std::vector<int> &observation,
-      std::vector<size_t> &states);
+      std::vector<size_t> &states,
+      matrix &fm, matrix &fi, matrix &fd,
+      matrix &bm, matrix &bi, matrix &bd);
 
   double
-  PosteriorProb(const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
+  PosteriorProb(const matrix &transition,
+      const matrix &emission,
       const std::vector<int> &observation);
 
 private:
@@ -106,34 +112,34 @@ private:
 
   void
   forward_algorithm(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
+      const matrix &transition,
+      const matrix &emission,
       const std::vector<int> &observation,
-      std::vector<std::vector<double> > &fm,
-      std::vector<std::vector<double> > &fi,
-      std::vector<std::vector<double> > &fd);
+      matrix &fm,
+      matrix &fi,
+      matrix &fd);
 
   void
   backward_algorithm(const bool VERBOSE,
-      const std::vector<std::vector<double> > &transition,
-      const std::vector<std::vector<double> > &emission,
+      const matrix &transition,
+      const matrix &emission,
       const std::vector<int> &observation,
-      std::vector<std::vector<double> > &bm,
-      std::vector<std::vector<double> > &bi,
-      std::vector<std::vector<double> > &bd);
+      matrix &bm,
+      matrix &bi,
+      matrix &bd);
 
   size_t model_len;
-  const double LOG_ZERO = -1e7;
   const size_t total_size = model_len * 3 + 2;
   const double tolerance = 1e-10;
   const size_t max_iterations = 100;
-  std::vector<std::vector<double> > all_fm, all_fi, all_fd;
-  std::vector<std::vector<double> > all_bm, all_bi, all_bd;
 };
 
 void
-print_transition(const std::vector<std::vector<double> > &transition);
+print_transition(const matrix &transition);
 
 void
-print_emission(const std::vector<std::vector<double> > &emission);
+print_emission(const matrix &emission);
+
+void
+log_odds_transform(matrix &emission);
 #endif
