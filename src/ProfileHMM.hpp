@@ -1,7 +1,4 @@
-/*    methcounts: a program for counting the methylated and
- *    unmethylated reads mapping over each CpG or C
- *
- *    Copyright (C) 2016 University of Southern California and
+/*    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
  *
  *    This program is free software: you can redistribute it and/or modify
@@ -21,43 +18,14 @@
 #ifndef PHMM_HPP
 #define PHMM_HPP
 
-#include <string>
-#include <initializer_list>
 #include <gsl/gsl_randist.h>
 #include <map>
 
 #include "smithlab_utils.hpp"
-
-typedef std::vector<std::vector<double> > matrix;
-
-extern const double LOG_ZERO;
+#include "matrix_utils.hpp"
 
 size_t
 baseint2stateint(const size_t &baseint, const bool marked);
-
-void
-print_transition(const matrix &transition);
-
-void
-print_emission(const matrix &emission);
-
-void
-log_odds_transform(matrix &emission);
-
-void
-normalize_vec_inplace(std::vector<double> &v, const bool logged);
-
-double
-log_sum_log_list(const std::initializer_list<double> &list);
-
-double
-log_sum_log(const double p, const double q);
-
-size_t
-argmax_list(const std::initializer_list<double> &list);
-
-size_t
-argmax_vec(const std::vector<double> &v);
 
 struct state {
   state();
@@ -146,7 +114,7 @@ private:
   posterior_prob(const matrix &forward) const;
 
   void
-  add_pseudocount_uniform(matrix &transition,
+  pseudo_count(matrix &transition,
       matrix &emission) const;
 
   std::map<size_t, std::vector<size_t> >
@@ -159,7 +127,17 @@ private:
   size_t total_size;
   std::map<size_t, std::vector<size_t> > transitions_to;
   std::map<size_t, std::vector<size_t> > transitions_from;
-  const double tolerance = 1e-9;
-  const size_t max_iterations = 50;
+  const double tolerance = 1e-6;
+  const size_t max_iterations = 100;
 };
+
+void
+log_odds_transform(matrix &emission);
+
+void
+print_transition(const matrix &transition);
+
+void
+print_emission(const matrix &emission);
+
 #endif

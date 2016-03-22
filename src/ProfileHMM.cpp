@@ -1,7 +1,4 @@
-/*    methcounts: a program for counting the methylated and
- *    unmethylated reads mapping over each CpG or C
- *
- *    Copyright (C) 2016 University of Southern California and
+/*    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
  *
  *    This program is free software: you can redistribute it and/or modify
@@ -20,22 +17,18 @@
 
 #include "ProfileHMM.hpp"
 
-#include <cmath>
-#include <algorithm>
 #include <vector>
 #include <iostream>
 #include <iomanip>
 
 using std::vector;
-using std::max;
 using std::pair;
+using std::max;
 using std::string;
 using std::endl;
 using std::cout;
 using std::cerr;
 using std::map;
-
-const double LOG_ZERO = -1e20;
 
 size_t
 baseint2stateint(const size_t &baseint,
@@ -50,19 +43,6 @@ baseint2stateint(const size_t &baseint,
     return 1;
   else
     return 4; // gap in not marked column; this is not supposed to happen
-}
-
-void
-normalize_vec_inplace(vector<double> &v, const bool logged = true) {
-  double sum = logged ?
-    smithlab::log_sum_log_vec(v, v.size())
-    : accumulate(v.begin(), v.end(), 0.0);
-  for (vector<double>::iterator i = v.begin();
-      i < v.end(); ++i)
-    if (logged)
-      *i = *i - sum;
-    else
-      *i = sum < 1e-6 ? 0.0 : *i / sum;
 }
 
 state::state() {};
@@ -123,46 +103,6 @@ random_weighted_sample(const gsl_rng* rng, const vector<double> &prob) {
     cumulative += exp(prob[i]);
   }
   return i-1;
-}
-
-double
-log_sum_log(const double p, const double q) {
-  if (p == 0) {return q;}
-  else if (q == 0) {return p;}
-  const double larger = (p > q) ? p : q;
-  const double smaller = (p > q) ? q : p;
-  return larger + log(1.0 + exp(smaller - larger));
-}
-
-double
-log_sum_log_list(const std::initializer_list<double> &list) {
-  const vector<double> vals(list);
-  const vector<double>::const_iterator x = 
-    std::max_element(vals.begin(), vals.end());
-  const double max_val = *x;
-  const size_t max_idx = x - vals.begin();
-  double sum = 1.0;
-  for (size_t i = 0; i < vals.size(); ++i) {
-    if (i != max_idx) {
-      sum += exp(vals[i] - max_val);
-    }
-  }
-  return max_val + log(sum);
-}
-
-size_t
-argmax_list(const std::initializer_list<double> &list) {
-  const vector<double> v(list);
-  const vector<double>::const_iterator x = 
-     std::max_element(v.begin(), v.end());
-  return x - v.begin();
-}
-
-size_t
-argmax_vec(const vector<double> &v) {
-  const vector<double>::const_iterator x = 
-     std::max_element(v.begin(), v.end());
-  return x - v.begin();
 }
 
 ProfileHMM::ProfileHMM() {};
@@ -724,12 +664,12 @@ ProfileHMM::Train(const bool VERBOSE,
       }
     }
     // add pseudocount and normalize
-    add_pseudocount_uniform(transition, emission);
+    pseudo_count(transition, emission);
     for (matrix::iterator row = transition.begin();
         row < transition.end() - 1; ++row)
-      normalize_vec_inplace(*row);
+      normalize_vec_inplace(*row, true);
     for (size_t i = index_m(1); i < index_d(1); ++i)
-      normalize_vec_inplace(emission[i]);
+      normalize_vec_inplace(emission[i], true);
 
     // update forward and backward prob using updated parameters
     forward_algorithm(false, transition, emission, observation, forward);
@@ -738,7 +678,7 @@ ProfileHMM::Train(const bool VERBOSE,
     ll_new = posterior_prob(forward);
     if (VERBOSE) {
       cout << itr + 1 << "/" << max_iterations << "\t"
-        << ll << "\t" << ll_new << "\t"
+        << ll << "\t" << ll_new << "\t" << std::setprecision(6)
         << std::abs((ll_new - ll)/ll_new) << endl;
     }
   }
@@ -824,67 +764,22 @@ ProfileHMM::posterior_prob(const matrix &forward) const {
 }
 
 void
-ProfileHMM::add_pseudocount_uniform(matrix &transition,
+ProfileHMM::pseudo_count(matrix &transition,
     matrix &emission) const {
-  assert(transition.size() == total_size);
-  assert(emission.size() == total_size);
   const double PSEUDOCOUNT = -5;
-  
-  // transition
-  // M_0 to I_0 and D_1
-  transition[0][index_d(1)] =
-    log_sum_log(transition[0][index_d(1)], PSEUDOCOUNT);
-  transition[0][index_i(0)] =
-    log_sum_log(transition[0][index_i(0)], PSEUDOCOUNT);
-  // I_0 to I_0, D_1 and end
-  transition[index_i(0)][index_i(0)] =
-    log_sum_log(transition[index_i(0)][index_i(0)], PSEUDOCOUNT);
-  transition[index_i(0)][index_d(1)] =
-    log_sum_log(transition[index_i(0)][index_d(1)], PSEUDOCOUNT);
-  transition[index_i(0)].back() =
-    log_sum_log(transition[index_i(0)].back(), PSEUDOCOUNT);
-  // D_1 to M_i
-  for (size_t i = 1; i <= model_len; ++i)
-    transition[index_d(1)][index_m(i)] =
-      log_sum_log(transition[index_d(1)][index_m(i)], PSEUDOCOUNT);
-  // general
-  for (size_t i = 1; i < model_len; ++i) {
-    // M_i
-    transition[index_m(i)][index_m(i+1)] =
-      log_sum_log(transition[index_m(i)][index_m(i+1)], PSEUDOCOUNT);
-    transition[index_m(i)][index_i(i)] =
-      log_sum_log(transition[index_m(i)][index_i(i)], PSEUDOCOUNT);
-    transition[index_m(i)][index_d(i+1)] =
-      log_sum_log(transition[index_m(i)][index_d(i+1)], PSEUDOCOUNT);
-    // I_i
-    transition[index_i(i)][index_m(i+1)] =
-      log_sum_log(transition[index_i(i)][index_m(i+1)], PSEUDOCOUNT);
-    transition[index_i(i)][index_i(i)] =
-      log_sum_log(transition[index_i(i)][index_i(i)], PSEUDOCOUNT);
-    if (i < model_len - 1)
-      transition[index_i(i)][index_d(i+1)] =
-        log_sum_log(transition[index_i(i)][index_d(i+1)], PSEUDOCOUNT);
-    // D_i
-    if (i > 1) {
-      transition[index_d(i)][index_m(i+1)] =
-        log_sum_log(transition[index_d(i)][index_m(i+1)], PSEUDOCOUNT);
-      transition[index_d(i)][index_i(i)] =
-        log_sum_log(transition[index_d(i)][index_i(i)], PSEUDOCOUNT);
-      if (i < model_len - 1)
-        transition[index_d(i)][index_d(i+1)] =
-          log_sum_log(transition[index_d(i)][index_d(i+1)], PSEUDOCOUNT);
+  for (map<size_t, vector<size_t> >::const_iterator from =
+      transitions_to.begin();
+      from != transitions_to.end(); ++from) {
+    for (vector<size_t>::const_iterator to = from->second.begin();
+        to < from->second.end(); ++to) {
+      transition[from->first][*to] =
+        log_sum_log(transition[from->first][*to], PSEUDOCOUNT);
     }
   }
-  // D_L to I_0 and end
-  transition[index_d(model_len)][index_i(0)] =
-    log_sum_log(transition[index_d(model_len)][index_i(0)], PSEUDOCOUNT);
-  transition[index_d(model_len)].back() =
-    log_sum_log(transition[index_d(model_len)].back(), PSEUDOCOUNT);
-
-  // emission
-  for (size_t i = index_m(1); i <= index_i(model_len - 1); ++i) {
-    for (size_t j = 0; j < 4; ++j)
+  for (size_t i = index_m(1); i < index_d(1); ++i) {
+    for (size_t j = 0; j < 4; ++j) {
       emission[i][j] = log_sum_log(emission[i][j], PSEUDOCOUNT);
+    }
   }
 }
 
@@ -961,6 +856,20 @@ ProfileHMM::get_viable_transitions_from(void) const {
   t[total_size - 1] = vector<size_t>({index_i(0), index_d(model_len)});
 
   return t;
+}
+
+void
+log_odds_transform(matrix &emission) {
+  const size_t model_len = (emission.size() - 2) / 3;
+  vector<double> bg = emission[state(0ul, 0, 1).index(model_len)];
+  for (size_t i = 0; i < model_len; ++i) {
+    for (size_t j = 0; j < emission.front().size(); ++j) {
+      emission[state(0ul, i+1, 0).index(model_len)][j] =
+        emission[state(0ul, i+1, 0).index(model_len)][j] - bg[j];
+      emission[state(0ul, i, 1).index(model_len)][j] =
+        emission[state(0ul, i, 1).index(model_len)][j] - bg[j];
+    }
+  }
 }
 
 void
@@ -1059,19 +968,5 @@ print_emission(const matrix &emission) {
       << "\t" << exp(emission[state(0ul,i,1).index(model_len)][2])
       << "\t" << exp(emission[state(0ul,i,1).index(model_len)][3])
       << endl;
-  }
-}
-
-void
-log_odds_transform(matrix &emission) {
-  const size_t model_len = (emission.size() - 2) / 3;
-  vector<double> bg = emission[state(0ul, 0, 1).index(model_len)];
-  for (size_t i = 0; i < model_len; ++i) {
-    for (size_t j = 0; j < emission.front().size(); ++j) {
-      emission[state(0ul, i+1, 0).index(model_len)][j] =
-        emission[state(0ul, i+1, 0).index(model_len)][j] - bg[j];
-      emission[state(0ul, i, 1).index(model_len)][j] =
-        emission[state(0ul, i, 1).index(model_len)][j] - bg[j];
-    }
   }
 }

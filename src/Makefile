@@ -47,16 +47,7 @@ install: $(PROGS)
 
 $(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
   	OptionParser.o GenomicRegion.o)\
-  	ProfileHMM.o
-#test: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-#  	OptionParser.o GenomicRegion.o)\
-#	ProfileHMM.o
-#scan: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-#  	OptionParser.o GenomicRegion.o)\
-#  	ProfileHMM.o
-#construct: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-#  	OptionParser.o)\
-#  	ProfileHMM.o
+  	matrix_utils.o ProfileHMM.o
 
 %.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $< $(INCLUDEARGS)
