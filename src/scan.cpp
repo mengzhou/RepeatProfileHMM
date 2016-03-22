@@ -143,8 +143,8 @@ void identify_repeats(const matrix &transition,
   const size_t model_len = (transition.size() - 1)/3;
   const size_t bg_state = state(0ul, 0, 1).index(model_len);
   size_t start = 0, end = 0;
-  for (vector<size_t>::const_iterator i = states.begin()
-      ;i < states.end() - 1; ++i) {
+  for (vector<size_t>::const_iterator i = states.begin();
+      i < states.end() - 1; ++i) {
     vector<size_t>::const_iterator j = next(i);
     if (*i == bg_state && *j != bg_state)
       start = j - states.begin();
@@ -166,6 +166,7 @@ int
 main (int argc, const char **argv) {
   try {
     bool VERBOSE = false;
+    bool DEBUG = false;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
     size_t seed = time(0) * getpid();
@@ -179,6 +180,7 @@ main (int argc, const char **argv) {
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, out_file);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
+    opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -231,15 +233,8 @@ main (int argc, const char **argv) {
       vector<int> observation;
       vector<size_t> states;
       seq_to_int(rng, chr_seq, observation);
-      matrix fm(model_len+1, vector<double>(observation.size()+1, LOG_ZERO));
-      matrix fi(model_len, vector<double>(observation.size()+1, LOG_ZERO));
-      matrix fd(model_len, vector<double>(observation.size()+1, LOG_ZERO));
-      matrix bm(model_len+1, vector<double>(observation.size()+1, LOG_ZERO));
-      matrix bi(model_len, vector<double>(observation.size()+1, LOG_ZERO));
-      matrix bd(model_len, vector<double>(observation.size()+1, LOG_ZERO));
       ProfileHMM hmm(model_len);
-      hmm.PosteriorDecoding(false, transition, emission, observation, states,
-          fm, fi, fd, bm, bi, bd);
+      hmm.PosteriorDecoding(DEBUG, transition, emission, observation, states);
 
       vector<GenomicRegion> coordinates;
       identify_repeats(transition, emission, observation, states,

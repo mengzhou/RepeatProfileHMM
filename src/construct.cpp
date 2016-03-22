@@ -45,15 +45,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-double
-log_sum_log(const double p, const double q) {
-  if (p == 0) {return q;}
-  else if (q == 0) {return p;}
-  const double larger = (p > q) ? p : q;
-  const double smaller = (p > q) ? q : p;
-  return larger + log(1.0 + exp(smaller - larger));
-}
-
 void
 log_transform_matrix(matrix &m) {
   for (matrix::iterator i = m.begin();
@@ -77,13 +68,6 @@ log_transform_vec(vector<double> &v) {
     else
       *i = log(*i);
   }
-}
-
-size_t
-argmax_vec(const vector<double> &v) {
-  const vector<double>::const_iterator x = 
-     max_element(v.begin(), v.end());
-  return x - v.begin();
 }
 
 vector<double>

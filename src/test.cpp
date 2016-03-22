@@ -483,11 +483,12 @@ main (int argc, const char **argv) {
     else {
       input_seq = input;
     }
+    // Decoding test
     vector<pair<char, size_t> > trace;
     vector<size_t> states;
     vector<int> observation;
     seq_to_int(rng, input_seq, observation);
-    log_odds_transform(emission);
+    //log_odds_transform(emission);
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
@@ -498,18 +499,26 @@ main (int argc, const char **argv) {
     matrix bm(model_len+1, vector<double>(seq_len+1, LOG_ZERO));
     matrix bi(model_len, vector<double>(seq_len+1, LOG_ZERO));
     matrix bd(model_len, vector<double>(seq_len+1, LOG_ZERO));
-    hmm.PosteriorDecoding(VERBOSE, transition, emission, observation, states,
-        fm, fi, fd, bm, bi, bd);
+    hmm.PosteriorDecoding(false, transition, emission, observation, states);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
-    vector<GenomicRegion> coordinates;
-    identify_repeats(transition, emission, observation, states,
-      hmm, chrom_names[0], coordinates);
-    for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-      i < coordinates.end(); ++i)
-    {
-      cout << (*i) << endl;
-    }
+    //vector<GenomicRegion> coordinates;
+    //identify_repeats(transition, emission, observation, states,
+    //  hmm, chrom_names[0], coordinates);
+    //for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
+    //  i < coordinates.end(); ++i)
+    //{
+    //  cout << (*i) << endl;
+    //}
+
+    // Learning test
+    print_transition(transition);
+    print_emission(emission);
+    //hmm.BW_training(VERBOSE, transition, emission, observation);
+    hmm.Train(VERBOSE, transition, emission, observation);
+    print_transition(transition);
+    print_emission(emission);
+    hmm.PosteriorDecoding(false, transition, emission, observation, states);
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {

@@ -21,8 +21,11 @@
 #ifndef PHMM_HPP
 #define PHMM_HPP
 
+#include <string>
 #include <initializer_list>
 #include <gsl/gsl_randist.h>
+#include <map>
+
 #include "smithlab_utils.hpp"
 
 typedef std::vector<std::vector<double> > matrix;
@@ -32,12 +35,37 @@ extern const double LOG_ZERO;
 size_t
 baseint2stateint(const size_t &baseint, const bool marked);
 
+void
+print_transition(const matrix &transition);
+
+void
+print_emission(const matrix &emission);
+
+void
+log_odds_transform(matrix &emission);
+
+void
+normalize_vec_inplace(std::vector<double> &v, const bool logged);
+
+double
+log_sum_log_list(const std::initializer_list<double> &list);
+
+double
+log_sum_log(const double p, const double q);
+
+size_t
+argmax_list(const std::initializer_list<double> &list);
+
+size_t
+argmax_vec(const std::vector<double> &v);
+
 struct state {
   state();
   state(const size_t b, const size_t i, const size_t s) :
     baseint(b), idx(i), stateint(s) {}
   state(const char b, const size_t i, const bool m);
   state(const state &obj);
+  state(const size_t model_len, const size_t matrix_idx);
 
   size_t baseint;
   size_t idx;
@@ -51,19 +79,8 @@ class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114 (bottom figure)
 public:
-  ProfileHMM(const size_t ml) : model_len(ml) {}
-
-  static double
-  log_sum_log_list(const std::initializer_list<double> &list);
-
-  static double
-  log_sum_log(const double p, const double q);
-
-  static size_t
-  argmax_list(const std::initializer_list<double> &list);
-
-  static size_t
-  argmax_vec(const std::vector<double> &v);
+  ProfileHMM();
+  ProfileHMM(const size_t ml);
 
   double
   ViterbiDecoding(const bool VERBOSE,
@@ -73,7 +90,7 @@ public:
       std::vector<std::pair<char, size_t> > &trace) const;
 
   void
-  BW_training(const bool VERBOSE,
+  Train(const bool VERBOSE,
       matrix &transition,
       matrix &emission,
       const std::vector<int> &observation);
@@ -91,14 +108,12 @@ public:
       const matrix &transition,
       const matrix &emission,
       const std::vector<int> &observation,
-      std::vector<size_t> &states,
-      matrix &fm, matrix &fi, matrix &fd,
-      matrix &bm, matrix &bi, matrix &bd);
+      std::vector<size_t> &states) const;
 
   double
   PosteriorProb(const matrix &transition,
       const matrix &emission,
-      const std::vector<int> &observation);
+      const std::vector<int> &observation) const;
 
 private:
   size_t
@@ -110,36 +125,41 @@ private:
   size_t
   index_d(const size_t idx) const;
 
+  std::string
+  state_idx_to_str(const size_t idx) const;
+
   void
   forward_algorithm(const bool VERBOSE,
       const matrix &transition,
       const matrix &emission,
       const std::vector<int> &observation,
-      matrix &fm,
-      matrix &fi,
-      matrix &fd);
+      matrix &forward) const;
 
   void
   backward_algorithm(const bool VERBOSE,
       const matrix &transition,
       const matrix &emission,
       const std::vector<int> &observation,
-      matrix &bm,
-      matrix &bi,
-      matrix &bd);
+      matrix &backward) const;
+
+  double
+  posterior_prob(const matrix &forward) const;
+
+  void
+  add_pseudocount_uniform(matrix &transition,
+      matrix &emission) const;
+
+  std::map<size_t, std::vector<size_t> >
+  get_viable_transitions_to(void) const;
+
+  std::map<size_t, std::vector<size_t> >
+  get_viable_transitions_from(void) const;
 
   size_t model_len;
-  const size_t total_size = model_len * 3 + 2;
-  const double tolerance = 1e-10;
-  const size_t max_iterations = 100;
+  size_t total_size;
+  std::map<size_t, std::vector<size_t> > transitions_to;
+  std::map<size_t, std::vector<size_t> > transitions_from;
+  const double tolerance = 1e-9;
+  const size_t max_iterations = 50;
 };
-
-void
-print_transition(const matrix &transition);
-
-void
-print_emission(const matrix &emission);
-
-void
-log_odds_transform(matrix &emission);
 #endif

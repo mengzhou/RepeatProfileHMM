@@ -152,7 +152,7 @@ def generate_insertion_sites( genome_length, num ):
 
 def text_wrap( text, width = 50 ):
   if len(text) < width:
-    return text
+    return text + "\n"
 
   bin = len(text) / width
   new_text = ""
