@@ -59,9 +59,11 @@ public:
 
   void
   Train(const bool VERBOSE,
+      const double tolerance,
+      const size_t max_iterations,
       matrix &transition,
       matrix &emission,
-      const std::vector<int> &observation);
+      const std::vector<int> &observation) const;
 
   void
   SampleSequence(const bool VERBOSE,
@@ -97,14 +99,14 @@ private:
   state_idx_to_str(const size_t idx) const;
 
   void
-  forward_algorithm(const bool VERBOSE,
+  forward_algorithm(const bool DEBUG,
       const matrix &transition,
       const matrix &emission,
       const std::vector<int> &observation,
       matrix &forward) const;
 
   void
-  backward_algorithm(const bool VERBOSE,
+  backward_algorithm(const bool DEBUG,
       const matrix &transition,
       const matrix &emission,
       const std::vector<int> &observation,
@@ -123,12 +125,13 @@ private:
   std::map<size_t, std::vector<size_t> >
   get_viable_transitions_from(void) const;
 
+  bool
+  is_emission_state(const size_t idx) const;
+
   size_t model_len;
   size_t total_size;
   std::map<size_t, std::vector<size_t> > transitions_to;
   std::map<size_t, std::vector<size_t> > transitions_from;
-  const double tolerance = 1e-6;
-  const size_t max_iterations = 100;
 };
 
 void

@@ -515,7 +515,7 @@ main (int argc, const char **argv) {
     print_transition(transition);
     print_emission(emission);
     //hmm.BW_training(VERBOSE, transition, emission, observation);
-    hmm.Train(VERBOSE, transition, emission, observation);
+    hmm.Train(VERBOSE, 1e-4, 20, transition, emission, observation);
     print_transition(transition);
     print_emission(emission);
     hmm.PosteriorDecoding(false, transition, emission, observation, states);

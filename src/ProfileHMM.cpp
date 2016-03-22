@@ -427,33 +427,29 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
   forward[index_d(1)][0] = transition[index_m(0)][index_d(1)];
 
   for (size_t pos = 1; pos < seq_len + 1; ++pos) {
-    for (size_t state_idx = 0; state_idx < index_d(1); ++state_idx) {
+    for (size_t state_idx = 0; state_idx < total_size; ++state_idx) {
       // states with emission: M/I
       const map<size_t, vector<size_t> >::const_iterator i = 
         transitions_from.find(state_idx);
       if (i != transitions_from.end()) {
         vector<double> list;
-        for (vector<size_t>::const_iterator j = i->second.begin();
-            j < i->second.end(); ++j) {
-          list.push_back(forward[*j][pos-1] + transition[*j][i->first]);
+        if (is_emission_state(i->first)) {
+          for (vector<size_t>::const_iterator j = i->second.begin();
+              j < i->second.end(); ++j) {
+            list.push_back(forward[*j][pos-1] + transition[*j][i->first]);
+          }
+          forward[i->first][pos] =
+            smithlab::log_sum_log_vec(list, list.size())
+            + emission[i->first][observation[pos-1]];
         }
-        forward[i->first][pos] =
-          smithlab::log_sum_log_vec(list, list.size())
-          + emission[i->first][observation[pos-1]];
-      }
-    }
-    for (size_t state_idx = index_d(1); state_idx < total_size; ++state_idx) {
-      // states without emission: D
-      const map<size_t, vector<size_t> >::const_iterator i = 
-        transitions_from.find(state_idx);
-      if (i != transitions_from.end()) {
-        vector<double> list;
-        for (vector<size_t>::const_iterator j = i->second.begin();
-            j < i->second.end(); ++j) {
-          list.push_back(forward[*j][pos] + transition[*j][i->first]);
+        else {
+          for (vector<size_t>::const_iterator j = i->second.begin();
+              j < i->second.end(); ++j) {
+            list.push_back(forward[*j][pos] + transition[*j][i->first]);
+          }
+          forward[i->first][pos] =
+            smithlab::log_sum_log_vec(list, list.size());
         }
-        forward[i->first][pos] =
-          smithlab::log_sum_log_vec(list, list.size());
       }
     }
   }
@@ -521,7 +517,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
         vector<double> list;
         for (vector<size_t>::const_reverse_iterator j = i->second.rbegin();
             j < i->second.rend(); ++j) {
-          if (*j > 0 && *j < index_d(1)) {
+          if (is_emission_state(*j)) {
             // *j is an M/I state with viable emission
             list.push_back(backward[*j][pos+1]
                 + transition[i->first][*j]
@@ -584,9 +580,11 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
 
 void
 ProfileHMM::Train(const bool VERBOSE,
+    const double tolerance,
+    const size_t max_iterations,
     matrix &transition,
     matrix &emission,
-    const vector<int> &observation) {
+    const vector<int> &observation) const {
   const size_t seq_len = observation.size();
   matrix forward, backward;
   forward_algorithm(false, transition, emission, observation, forward);
@@ -613,7 +611,7 @@ ProfileHMM::Train(const bool VERBOSE,
           j < trans->second.end(); ++j) {
         vector<double> list;
         for (size_t pos = 0; pos <= seq_len; ++pos) {
-          if (*j > index_m(0) && *j < index_d(1)) {
+          if (is_emission_state(*j)) {
             if (pos < seq_len)
               list.push_back(forward[i][pos] + transition[i][*j]
                   + emission[*j][observation[pos]]
@@ -697,8 +695,7 @@ ProfileHMM::SampleSequence(const bool VERBOSE,
   while (idx < total_size - 1) {
     idx = random_weighted_sample(rng, transition[idx]);
     states.push_back(idx);
-    if (exp(smithlab::log_sum_log_vec(emission[idx], emission[idx].size())) - 1.0
-      > -tolerance) {
+    if (is_emission_state(idx)) {
       seq.push_back(static_cast<int>(
             random_weighted_sample(rng, emission[idx])));
     }
@@ -856,6 +853,11 @@ ProfileHMM::get_viable_transitions_from(void) const {
   t[total_size - 1] = vector<size_t>({index_i(0), index_d(model_len)});
 
   return t;
+}
+
+bool
+ProfileHMM::is_emission_state(const size_t idx) const {
+  return idx >= index_m(1) && idx < index_d(1);
 }
 
 void
