@@ -48,12 +48,10 @@ class ProfileHMM {
   // see Durbin book p.114 (bottom figure)
 public:
   ProfileHMM();
-  ProfileHMM(const size_t ml);
+  ProfileHMM(const matrix &t, const matrix &e);
 
   double
   ViterbiDecoding(const bool VERBOSE,
-      const matrix &transition,
-      const matrix &emission,
       const std::vector<int> &observation,
       std::vector<std::pair<char, size_t> > &trace) const;
 
@@ -61,29 +59,29 @@ public:
   Train(const bool VERBOSE,
       const double tolerance,
       const size_t max_iterations,
-      matrix &transition,
-      matrix &emission,
-      const std::vector<int> &observation) const;
+      const std::vector<int> &observation);
 
   void
   SampleSequence(const bool VERBOSE,
       const gsl_rng* rng,
-      const matrix &transition,
-      const matrix &emission,
       std::vector<int> &seq,
       std::vector<size_t> &states) const;
 
   void
   PosteriorDecoding(const bool VERBOSE,
-      const matrix &transition,
-      const matrix &emission,
+      const bool USE_LOG_ODDS,
       const std::vector<int> &observation,
       std::vector<size_t> &states) const;
 
   double
-  PosteriorProb(const matrix &transition,
-      const matrix &emission,
+  PosteriorProb(const bool USE_LOG_ODDS,
       const std::vector<int> &observation) const;
+
+  void
+  Print(void) const;
+
+  size_t
+  Length(void) const;
 
 private:
   size_t
@@ -100,15 +98,13 @@ private:
 
   void
   forward_algorithm(const bool DEBUG,
-      const matrix &transition,
-      const matrix &emission,
+      const bool USE_LOG_ODDS,
       const std::vector<int> &observation,
       matrix &forward) const;
 
   void
   backward_algorithm(const bool DEBUG,
-      const matrix &transition,
-      const matrix &emission,
+      const bool USE_LOG_ODDS,
       const std::vector<int> &observation,
       matrix &backward) const;
 
@@ -116,31 +112,32 @@ private:
   posterior_prob(const matrix &forward) const;
 
   void
-  pseudo_count(matrix &transition,
-      matrix &emission) const;
+  pseudo_count(void);
 
-  std::map<size_t, std::vector<size_t> >
-  get_viable_transitions_to(void) const;
+  void
+  get_viable_transitions_to(void);
 
-  std::map<size_t, std::vector<size_t> >
-  get_viable_transitions_from(void) const;
+  void
+  get_viable_transitions_from(void);
 
   bool
   is_emission_state(const size_t idx) const;
+
+  void
+  print_transition(void) const;
+  
+  void
+  print_emission(void) const;
 
   size_t model_len;
   size_t total_size;
   std::map<size_t, std::vector<size_t> > transitions_to;
   std::map<size_t, std::vector<size_t> > transitions_from;
+  matrix transition;
+  matrix emission;
 };
 
 void
 log_odds_transform(matrix &emission);
-
-void
-print_transition(const matrix &transition);
-
-void
-print_emission(const matrix &emission);
 
 #endif

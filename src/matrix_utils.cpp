@@ -21,6 +21,7 @@
 #include <algorithm>
 
 using std::vector;
+using std::pair;
 
 const double LOG_ZERO = -1e20;
 
@@ -75,4 +76,64 @@ argmax_vec(const vector<double> &v) {
   const vector<double>::const_iterator x = 
      std::max_element(v.begin(), v.end());
   return x - v.begin();
+}
+
+void
+log_transform_matrix(matrix &m) {
+  for (matrix::iterator i = m.begin();
+      i < m.end(); ++i) {
+    for (vector<double>:: iterator j = (*i).begin();
+        j < (*i).end(); ++j) {
+      if (*j < 1e-6)
+        *j = LOG_ZERO;
+      else
+        *j = log(*j);
+    }
+  }
+}
+
+void
+log_transform_vec(vector<double> &v) {
+  for (vector<double>:: iterator i = v.begin();
+      i < v.end(); ++i) {
+    if (*i < 1e-6)
+      *i = LOG_ZERO;
+    else
+      *i = log(*i);
+  }
+}
+
+vector<double>
+normalize_vec(const vector<double> &v, const bool logged) {
+  vector<double> n;
+  double sum = logged ?
+    smithlab::log_sum_log_vec(v, v.size())
+    : accumulate(v.begin(), v.end(), 0.0);
+  for (vector<double>::const_iterator i = v.begin();
+      i < v.end(); ++i)
+    if (logged)
+      n.push_back(*i - sum);
+    else
+      n.push_back(sum < 1e-6 ? 0.0 : *i / sum);
+  return n;
+}
+
+vector<double>
+combine_normalize(const vector<double> &v1, const vector<double> &v2,
+    const bool logged,
+    const pair<double, double> &weight) {
+  assert(v1.size() == v2.size());
+  vector<double> combined, n1, n2;
+  n1 = normalize_vec(v1, logged);
+  n2 = normalize_vec(v2, logged);
+  for (size_t i = 0; i < n1.size(); ++i) {
+    if (logged)
+      combined.push_back(log_sum_log(
+            n1[i] + log(weight.first), n2[i] + log(weight.second)
+            ));
+    else
+      combined.push_back(n1[i] * weight.first + n2[i] * weight.second);
+  }
+  combined = normalize_vec(combined, logged);
+  return combined;
 }

@@ -42,4 +42,18 @@ argmax_list(const std::initializer_list<double> &list);
 size_t
 argmax_vec(const std::vector<double> &v);
 
+void
+log_transform_matrix(matrix &m);
+
+void
+log_transform_vec(std::vector<double> &v);
+
+std::vector<double>
+normalize_vec(const std::vector<double> &v, const bool logged);
+
+std::vector<double>
+combine_normalize(const std::vector<double> &v1, const std::vector<double> &v2,
+    const bool looged,
+    const std::pair<double, double> &weight = std::make_pair(0.5, 0.5));
+
 #endif

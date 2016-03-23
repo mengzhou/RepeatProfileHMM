@@ -418,7 +418,7 @@ void identify_repeats(const vector<vector<double> > &transition,
       const vector<int> obs(observation.begin() + start,
         observation.begin() + end);
       double score =
-        hmm.PosteriorProb(transition, emission, obs) - log(end - start);
+        hmm.PosteriorProb(true, obs) - log(end - start);
       string name = score > 50 ? "COPY" : "X";
       GenomicRegion new_copy(chr_name, start,
         end, name, score, '+');
@@ -466,7 +466,7 @@ main (int argc, const char **argv) {
   if (!out_par.empty())
     write_hmm_parameter(VERBOSE, out_par, transition, emission);
 
-  ProfileHMM hmm(model_len);
+  ProfileHMM hmm(transition, emission);
   vector<string> chrom_names, ref_chroms;
   // decoding test
   if (!input.empty()) {
@@ -492,14 +492,7 @@ main (int argc, const char **argv) {
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
-    const size_t seq_len = observation.size();
-    matrix fm(model_len+1, vector<double>(seq_len+1, LOG_ZERO));
-    matrix fi(model_len, vector<double>(seq_len+1, LOG_ZERO));
-    matrix fd(model_len, vector<double>(seq_len+1, LOG_ZERO));
-    matrix bm(model_len+1, vector<double>(seq_len+1, LOG_ZERO));
-    matrix bi(model_len, vector<double>(seq_len+1, LOG_ZERO));
-    matrix bd(model_len, vector<double>(seq_len+1, LOG_ZERO));
-    hmm.PosteriorDecoding(false, transition, emission, observation, states);
+    hmm.PosteriorDecoding(false, true, observation, states);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
     //vector<GenomicRegion> coordinates;
@@ -512,13 +505,10 @@ main (int argc, const char **argv) {
     //}
 
     // Learning test
-    print_transition(transition);
-    print_emission(emission);
-    //hmm.BW_training(VERBOSE, transition, emission, observation);
-    hmm.Train(VERBOSE, 1e-4, 20, transition, emission, observation);
-    print_transition(transition);
-    print_emission(emission);
-    hmm.PosteriorDecoding(false, transition, emission, observation, states);
+    hmm.Print();
+    hmm.Train(VERBOSE, 1e-4, 20, observation);
+    hmm.Print();
+    //hmm.PosteriorDecoding(false, true, observation, states);
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {
@@ -527,7 +517,7 @@ main (int argc, const char **argv) {
       vector<size_t> states;
       vector<int> seq;
       string output;
-      hmm.SampleSequence(VERBOSE, rng, transition, emission, seq, states);
+      hmm.SampleSequence(VERBOSE, rng, seq, states);
       cout << "#Trial " << i << endl;
       int_to_seq(seq, output);
       cout << "  Sampled seq:\t" << output << endl;
@@ -535,7 +525,7 @@ main (int argc, const char **argv) {
       cout << "  Trace:\t";
       print_trace(trace);
       trace.clear();
-      hmm.ViterbiDecoding(VERBOSE, transition, emission, seq, trace);
+      hmm.ViterbiDecoding(VERBOSE, seq, trace);
       cout << "  Decoded:\t";
       print_trace(trace);
       cout << endl;

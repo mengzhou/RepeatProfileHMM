@@ -32,6 +32,7 @@
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "ProfileHMM.hpp"
+#include "matrix_utils.hpp"
 
 using std::vector;
 using std::pair;
@@ -44,66 +45,6 @@ using std::ofstream;
 using std::cout;
 using std::cerr;
 using std::endl;
-
-void
-log_transform_matrix(matrix &m) {
-  for (matrix::iterator i = m.begin();
-      i < m.end(); ++i) {
-    for (vector<double>:: iterator j = (*i).begin();
-        j < (*i).end(); ++j) {
-      if (*j < 1e-6)
-        *j = LOG_ZERO;
-      else
-        *j = log(*j);
-    }
-  }
-}
-
-void
-log_transform_vec(vector<double> &v) {
-  for (vector<double>:: iterator i = v.begin();
-      i < v.end(); ++i) {
-    if (*i < 1e-6)
-      *i = LOG_ZERO;
-    else
-      *i = log(*i);
-  }
-}
-
-vector<double>
-normalize_vec(const vector<double> &v, const bool logged) {
-  vector<double> n;
-  double sum = logged ?
-    smithlab::log_sum_log_vec(v, v.size())
-    : accumulate(v.begin(), v.end(), 0.0);
-  for (vector<double>::const_iterator i = v.begin();
-      i < v.end(); ++i)
-    if (logged)
-      n.push_back(*i - sum);
-    else
-      n.push_back(sum < 1e-6 ? 0.0 : *i / sum);
-  return n;
-}
-
-vector<double>
-combine_normalize(const vector<double> &v1, const vector<double> &v2,
-    const bool logged,
-    const pair<double, double> &weight = std::make_pair(0.5, 0.5)) {
-  assert(v1.size() == v2.size());
-  vector<double> combined, n1, n2;
-  n1 = normalize_vec(v1, logged);
-  n2 = normalize_vec(v2, logged);
-  for (size_t i = 0; i < n1.size(); ++i) {
-    if (logged)
-      combined.push_back(log_sum_log(
-            n1[i] + log(weight.first), n2[i] + log(weight.second)
-            ));
-    else
-      combined.push_back(n1[i] * weight.first + n2[i] * weight.second);
-  }
-  combined = normalize_vec(combined, logged);
-  return combined;
-}
 
 void
 load_alignment(bool VERBOSE, const string infile,
@@ -638,10 +579,8 @@ main (int argc, const char **argv) {
       }
       cout << endl;
 
-      cout << "Transition:" << endl;
-      print_transition(transition);
-      cout << endl << "Emission:" << endl;
-      print_emission(emission);
+      ProfileHMM hmm(transition, emission);
+      hmm.Print();
     }
   }
   catch (const SMITHLABException &e) {

@@ -133,14 +133,12 @@ load_hmm_parameter(const string &input_file,
   assert(emission.size() == total_size);
 }
 
-void identify_repeats(const matrix &transition,
-    const matrix &emission,
+void identify_repeats(const ProfileHMM &hmm,
     const vector<int> &observation,
     const vector<size_t> &states,
-    ProfileHMM &hmm,
     const string chr_name,
     vector<GenomicRegion> &coordinates) {
-  const size_t model_len = (transition.size() - 1)/3;
+  const size_t model_len = hmm.Length();
   const size_t bg_state = state(0ul, 0, 1).index(model_len);
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
@@ -153,7 +151,7 @@ void identify_repeats(const matrix &transition,
       const vector<int> obs(observation.begin() + start,
         observation.begin() + end);
       double score =
-        hmm.PosteriorProb(transition, emission, obs) - log(end - start);
+        hmm.PosteriorProb(true, obs) - log(end - start);
       string name = score > 50 ? "COPY" : "X";
       GenomicRegion new_copy(chr_name, start,
         end, name, score, '+');
@@ -222,7 +220,8 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
 
-
+    if (VERBOSE)
+      cerr << "[SCANNING]" << endl;
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
       string chr_seq;
@@ -233,12 +232,12 @@ main (int argc, const char **argv) {
       vector<int> observation;
       vector<size_t> states;
       seq_to_int(rng, chr_seq, observation);
-      ProfileHMM hmm(model_len);
-      hmm.PosteriorDecoding(DEBUG, transition, emission, observation, states);
+      ProfileHMM hmm(transition, emission);
+      hmm.PosteriorDecoding(DEBUG, true, observation, states);
 
       vector<GenomicRegion> coordinates;
-      identify_repeats(transition, emission, observation, states,
-        hmm, chrom->first, coordinates);
+      identify_repeats(hmm, observation, states,
+        chrom->first, coordinates);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {

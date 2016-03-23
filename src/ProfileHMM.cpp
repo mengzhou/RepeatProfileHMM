@@ -107,11 +107,19 @@ random_weighted_sample(const gsl_rng* rng, const vector<double> &prob) {
 
 ProfileHMM::ProfileHMM() {};
 
-ProfileHMM::ProfileHMM(const size_t ml) {
-  model_len = ml;
-  total_size = model_len * 3 + 2;
-  transitions_to = get_viable_transitions_to();
-  transitions_from = get_viable_transitions_from();
+ProfileHMM::ProfileHMM(const matrix &t,
+    const matrix &e) {
+  transition = t;
+  emission = e;
+  total_size = t.size();
+  model_len = (total_size - 2) / 3;
+  get_viable_transitions_to();
+  get_viable_transitions_from();
+}
+
+size_t
+ProfileHMM::Length(void) const {
+  return model_len;
 }
 
 inline size_t
@@ -149,8 +157,6 @@ ProfileHMM::state_idx_to_str(const size_t idx) const {
 
 double
 ProfileHMM::ViterbiDecoding(const bool VERBOSE,
-    const matrix &transition,
-    const matrix &emission,
     const vector<int> &observation,
     vector<pair<char, size_t> > &trace) const {
   const size_t seq_len = observation.size();
@@ -416,8 +422,7 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
 
 void
 ProfileHMM::forward_algorithm(const bool VERBOSE,
-    const matrix &transition,
-    const matrix &emission,
+    const bool USE_LOG_ODDS,
     const vector<int> &observation,
     matrix &forward) const {
   const size_t seq_len = observation.size();
@@ -438,9 +443,15 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
               j < i->second.end(); ++j) {
             list.push_back(forward[*j][pos-1] + transition[*j][i->first]);
           }
-          forward[i->first][pos] =
-            smithlab::log_sum_log_vec(list, list.size())
-            + emission[i->first][observation[pos-1]];
+          if (USE_LOG_ODDS)
+            forward[i->first][pos] =
+              smithlab::log_sum_log_vec(list, list.size())
+              + emission[i->first][observation[pos-1]]
+              - emission[index_i(0)][observation[pos-1]];
+          else
+            forward[i->first][pos] =
+              smithlab::log_sum_log_vec(list, list.size())
+              + emission[i->first][observation[pos-1]];
         }
         else {
           for (vector<size_t>::const_iterator j = i->second.begin();
@@ -496,8 +507,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
 
 void
 ProfileHMM::backward_algorithm(const bool VERBOSE,
-    const matrix &transition,
-    const matrix &emission,
+    const bool USE_LOG_ODDS,
     const vector<int> &observation,
     matrix &backward) const {
   const size_t seq_len = observation.size();
@@ -519,9 +529,15 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
             j < i->second.rend(); ++j) {
           if (is_emission_state(*j)) {
             // *j is an M/I state with viable emission
-            list.push_back(backward[*j][pos+1]
-                + transition[i->first][*j]
-                + emission[*j][observation[pos]]);
+            if (USE_LOG_ODDS)
+              list.push_back(backward[*j][pos+1]
+                  + transition[i->first][*j]
+                  + emission[*j][observation[pos]]
+                  - emission[index_i(0)][observation[pos]]);
+            else
+              list.push_back(backward[*j][pos+1]
+                  + transition[i->first][*j]
+                  + emission[*j][observation[pos]]);
           }
           else {
             // *j is a D state without viable emission
@@ -582,13 +598,11 @@ void
 ProfileHMM::Train(const bool VERBOSE,
     const double tolerance,
     const size_t max_iterations,
-    matrix &transition,
-    matrix &emission,
-    const vector<int> &observation) const {
+    const vector<int> &observation) {
   const size_t seq_len = observation.size();
   matrix forward, backward;
-  forward_algorithm(false, transition, emission, observation, forward);
-  backward_algorithm(false, transition, emission, observation, backward);
+  forward_algorithm(false, false, observation, forward);
+  backward_algorithm(false, false, observation, backward);
   double ll = -1e10;
   double ll_new = posterior_prob(forward);
   if (VERBOSE)
@@ -662,7 +676,7 @@ ProfileHMM::Train(const bool VERBOSE,
       }
     }
     // add pseudocount and normalize
-    pseudo_count(transition, emission);
+    pseudo_count();
     for (matrix::iterator row = transition.begin();
         row < transition.end() - 1; ++row)
       normalize_vec_inplace(*row, true);
@@ -670,8 +684,8 @@ ProfileHMM::Train(const bool VERBOSE,
       normalize_vec_inplace(emission[i], true);
 
     // update forward and backward prob using updated parameters
-    forward_algorithm(false, transition, emission, observation, forward);
-    backward_algorithm(false, transition, emission, observation, backward);
+    forward_algorithm(false, false, observation, forward);
+    backward_algorithm(false, false, observation, backward);
     // Need some function for posterior probability here!
     ll_new = posterior_prob(forward);
     if (VERBOSE) {
@@ -685,8 +699,6 @@ ProfileHMM::Train(const bool VERBOSE,
 void
 ProfileHMM::SampleSequence(const bool VERBOSE,
     const gsl_rng* rng,
-    const matrix &transition,
-    const matrix &emission,
     vector<int> &seq,
     vector<size_t> &states) const {
   size_t idx = 0;
@@ -715,15 +727,14 @@ ProfileHMM::SampleSequence(const bool VERBOSE,
 
 void
 ProfileHMM::PosteriorDecoding(const bool DEBUG,
-    const matrix &transition,
-    const matrix &emission,
+    const bool USE_LOG_ODDS,
     const vector<int> &observation,
     vector<size_t> &states) const {
   const size_t seq_len = observation.size();
   matrix forward, backward;
 
-  forward_algorithm(false, transition, emission, observation, forward);
-  backward_algorithm(false, transition, emission, observation, backward);
+  forward_algorithm(false, USE_LOG_ODDS, observation, forward);
+  backward_algorithm(false, USE_LOG_ODDS, observation, backward);
 
   vector<double> xi(index_d(1), LOG_ZERO);
   for (size_t i = 1; i <= seq_len; ++i) {
@@ -743,12 +754,11 @@ ProfileHMM::PosteriorDecoding(const bool DEBUG,
 }
 
 double
-ProfileHMM::PosteriorProb(const matrix &transition,
-    const matrix &emission,
+ProfileHMM::PosteriorProb(const bool USE_LOG_ODDS,
     const vector<int> &observation) const {
   matrix forward;
 
-  forward_algorithm(false, transition, emission, observation, forward);
+  forward_algorithm(false, USE_LOG_ODDS, observation, forward);
   return posterior_prob(forward);
 }
 
@@ -761,8 +771,7 @@ ProfileHMM::posterior_prob(const matrix &forward) const {
 }
 
 void
-ProfileHMM::pseudo_count(matrix &transition,
-    matrix &emission) const {
+ProfileHMM::pseudo_count(void) {
   const double PSEUDOCOUNT = -5;
   for (map<size_t, vector<size_t> >::const_iterator from =
       transitions_to.begin();
@@ -780,79 +789,82 @@ ProfileHMM::pseudo_count(matrix &transition,
   }
 }
 
-map<size_t, vector<size_t> >
-ProfileHMM::get_viable_transitions_to(void) const {
-  map<size_t, vector<size_t> > t;
-  
+void
+ProfileHMM::get_viable_transitions_to(void) {
+  transitions_to.clear();
   // M_0 to I_0, D_1
-  t[0] = vector<size_t>({index_i(0), index_d(1)});
+  transitions_to[0] = vector<size_t>({index_i(0), index_d(1)});
   // I_0 to I_0, D_1, E
-  t[index_i(0)] = vector<size_t>({index_i(0), index_d(1), total_size - 1});
+  transitions_to[index_i(0)] =
+    vector<size_t>({index_i(0), index_d(1), total_size - 1});
   // D_1 to M_1...M_L
-  t[index_d(1)] = vector<size_t>();
+  transitions_to[index_d(1)] = vector<size_t>();
   for (size_t i = 1; i <= model_len; ++i)
-    t[index_d(1)].push_back(index_m(i));
+    transitions_to[index_d(1)].push_back(index_m(i));
   // general: i~L-1
   for (size_t i = 1; i < model_len; ++i) {
-    t[index_m(i)] = vector<size_t>({index_m(i+1), index_i(i),
+    transitions_to[index_m(i)] = vector<size_t>({index_m(i+1), index_i(i),
         index_d(i+1), index_d(model_len)});
     if (i < model_len - 1) {
-      t[index_i(i)] = vector<size_t>({index_m(i+1), index_i(i), index_d(i+1)});
+      transitions_to[index_i(i)] =
+        vector<size_t>({index_m(i+1), index_i(i), index_d(i+1)});
       if (i > 1)
-        t[index_d(i)] =
+        transitions_to[index_d(i)] =
           vector<size_t>({index_m(i+1), index_i(i), index_d(i+1)});
     }
   }
   // I_L-1
-  t[index_i(model_len-1)] =
+  transitions_to[index_i(model_len-1)] =
     vector<size_t>({index_i(model_len-1), index_m(model_len)});
   // D_L-1
-  t[index_d(model_len-1)] =
+  transitions_to[index_d(model_len-1)] =
     vector<size_t>({index_i(model_len-1), index_m(model_len)});
   // M_L
-  t[index_m(model_len)] = vector<size_t>(1, index_d(model_len));
+  transitions_to[index_m(model_len)] = vector<size_t>(1, index_d(model_len));
   // D_L
-  t[index_d(model_len)] = vector<size_t>({index_i(0), total_size - 1});
-
-  return t;
+  transitions_to[index_d(model_len)] =
+    vector<size_t>({index_i(0), total_size - 1});
 }
 
-map<size_t, vector<size_t> >
-ProfileHMM::get_viable_transitions_from(void) const {
-  map<size_t, vector<size_t> > t;
-
+void
+ProfileHMM::get_viable_transitions_from(void) {
+  transitions_from.clear();
   // to I_0: I_0, M_0, D_L
-  t[index_i(0)] = vector<size_t>({index_i(0), index_m(0), index_d(model_len)});
+  transitions_from[index_i(0)] =
+    vector<size_t>({index_i(0), index_m(0), index_d(model_len)});
   // to D_1: M_0, I_0
-  t[index_d(1)] = vector<size_t>({index_m(0), index_i(0)});
+  transitions_from[index_d(1)] = vector<size_t>({index_m(0), index_i(0)});
   // to M_1: D_1
-  t[index_m(1)] = vector<size_t>(1, index_d(1));
+  transitions_from[index_m(1)] = vector<size_t>(1, index_d(1));
   // to I_1: M_1, I_1
-  t[index_i(1)] = vector<size_t>({index_m(1), index_i(1)});
+  transitions_from[index_i(1)] = vector<size_t>({index_m(1), index_i(1)});
   // to M_2: M_1, I_1, D_1
-  t[index_m(2)] = vector<size_t>({index_m(1), index_i(1), index_d(1)});
+  transitions_from[index_m(2)] =
+    vector<size_t>({index_m(1), index_i(1), index_d(1)});
   // to I_2: M_1, I_2, D_2
-  t[index_i(2)] = vector<size_t>({index_m(2), index_i(2), index_d(2)});
+  transitions_from[index_i(2)] =
+    vector<size_t>({index_m(2), index_i(2), index_d(2)});
   // to D_2: M_1, I_1
-  t[index_d(2)] = vector<size_t>({index_m(1), index_i(1)});
+  transitions_from[index_d(2)] = vector<size_t>({index_m(1), index_i(1)});
   // general: i=3~L-1
   for (size_t i = 3; i < model_len; ++i) {
-    t[index_m(i)] = vector<size_t>({index_m(i-1), index_i(i-1),
+    transitions_from[index_m(i)] = vector<size_t>({index_m(i-1), index_i(i-1),
         index_d(i-1), index_d(1)});
-    t[index_i(i)] = vector<size_t>({index_m(i), index_i(i), index_d(i)});
-    t[index_d(i)] = vector<size_t>({index_m(i-1), index_i(i-1), index_d(i-1)});
+    transitions_from[index_i(i)] =
+      vector<size_t>({index_m(i), index_i(i), index_d(i)});
+    transitions_from[index_d(i)] =
+      vector<size_t>({index_m(i-1), index_i(i-1), index_d(i-1)});
   }
   // to M_L: M, I, D_L-1, D_1
-  t[index_m(model_len)] = vector<size_t>({index_m(model_len-1),
+  transitions_from[index_m(model_len)] = vector<size_t>({index_m(model_len-1),
       index_i(model_len-1), index_d(model_len-1), index_d(1)});
   // to D_L: M_1 to M_L
-  t[index_d(model_len)] = vector<size_t>();
+  transitions_from[index_d(model_len)] = vector<size_t>();
   for (size_t i = 1; i <= model_len; ++i)
-    t[index_d(model_len)].push_back(index_m(i));
+    transitions_from[index_d(model_len)].push_back(index_m(i));
   // to E: I_0, D_L
-  t[total_size - 1] = vector<size_t>({index_i(0), index_d(model_len)});
-
-  return t;
+  transitions_from[total_size - 1] =
+    vector<size_t>({index_i(0), index_d(model_len)});
 }
 
 bool
@@ -861,23 +873,15 @@ ProfileHMM::is_emission_state(const size_t idx) const {
 }
 
 void
-log_odds_transform(matrix &emission) {
-  const size_t model_len = (emission.size() - 2) / 3;
-  vector<double> bg = emission[state(0ul, 0, 1).index(model_len)];
-  for (size_t i = 0; i < model_len; ++i) {
-    for (size_t j = 0; j < emission.front().size(); ++j) {
-      emission[state(0ul, i+1, 0).index(model_len)][j] =
-        emission[state(0ul, i+1, 0).index(model_len)][j] - bg[j];
-      emission[state(0ul, i, 1).index(model_len)][j] =
-        emission[state(0ul, i, 1).index(model_len)][j] - bg[j];
-    }
-  }
+ProfileHMM::Print(void) const {
+  cout << "Transition" << endl;
+  print_transition();
+  cout << "Emission" << endl;
+  print_emission();
 }
 
 void
-print_transition(const matrix &transition) {
-  const size_t model_len = (transition.size() - 2) / 3;
-
+ProfileHMM::print_transition() const {
   cout << "#M_0->I_0, M_0->D_1 = "
     << exp(transition[0][state(0ul, 0, 1).index(model_len)]) << ", "
     << exp(transition[0][state(0ul, 1, 2).index(model_len)]) << endl;
@@ -946,8 +950,7 @@ print_transition(const matrix &transition) {
 }
 
 void
-print_emission(const matrix &emission) {
-  const size_t model_len = (emission.size() - 2) / 3;
+ProfileHMM::print_emission() const {
   cout << endl << "#M_i:" 
     << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
   for (size_t i = 1; i <= model_len; ++i) {
@@ -970,5 +973,19 @@ print_emission(const matrix &emission) {
       << "\t" << exp(emission[state(0ul,i,1).index(model_len)][2])
       << "\t" << exp(emission[state(0ul,i,1).index(model_len)][3])
       << endl;
+  }
+}
+
+void
+log_odds_transform(matrix &emission) {
+  const size_t model_len = (emission.size() - 2) / 3;
+  vector<double> bg = emission[state(0ul, 0, 1).index(model_len)];
+  for (size_t i = 0; i < model_len; ++i) {
+    for (size_t j = 0; j < emission.front().size(); ++j) {
+      emission[state(0ul, i+1, 0).index(model_len)][j] =
+        emission[state(0ul, i+1, 0).index(model_len)][j] - bg[j];
+      emission[state(0ul, i, 1).index(model_len)][j] =
+        emission[state(0ul, i, 1).index(model_len)][j] - bg[j];
+    }
   }
 }
