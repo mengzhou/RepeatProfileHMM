@@ -52,14 +52,14 @@ public:
 
   double
   ViterbiDecoding(const bool VERBOSE,
-      const std::vector<int> &observation,
+      const std::string &observation,
       std::vector<std::pair<char, size_t> > &trace) const;
 
   void
   Train(const bool VERBOSE,
       const double tolerance,
       const size_t max_iterations,
-      const std::vector<int> &observation);
+      const std::string &observation);
 
   void
   SampleSequence(const bool VERBOSE,
@@ -70,12 +70,12 @@ public:
   void
   PosteriorDecoding(const bool VERBOSE,
       const bool USE_LOG_ODDS,
-      const std::vector<int> &observation,
+      const std::string &observation,
       std::vector<size_t> &states) const;
 
   double
   PosteriorProb(const bool USE_LOG_ODDS,
-      const std::vector<int> &observation) const;
+      const std::string &observation) const;
 
   void
   Print(void) const;
@@ -99,13 +99,13 @@ private:
   void
   forward_algorithm(const bool DEBUG,
       const bool USE_LOG_ODDS,
-      const std::vector<int> &observation,
+      const std::string &observation,
       matrix &forward) const;
 
   void
   backward_algorithm(const bool DEBUG,
       const bool USE_LOG_ODDS,
-      const std::vector<int> &observation,
+      const std::string &observation,
       matrix &backward) const;
 
   double

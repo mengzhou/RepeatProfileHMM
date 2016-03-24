@@ -48,42 +48,6 @@ using std::endl;
 typedef unordered_map<string, string> chrom_file_map;
 
 void
-seq_to_int(const string &seq, vector<int> &observation) {
-  // no rng version
-  for (string::const_iterator i = seq.begin(); i < seq.end(); ++i) {
-    if (*i == 'A' || *i == 'a')
-      observation.push_back(0);
-    else if (*i == 'C' || *i == 'c')
-      observation.push_back(1);
-    else if (*i == 'G' || *i == 'g')
-      observation.push_back(2);
-    else if (*i == 'T' || *i == 't')
-      observation.push_back(3);
-    else {
-      observation.push_back('A');
-    }
-  }
-}
-
-void
-seq_to_int(const gsl_rng* rng, const string &seq, vector<int> &observation) {
-  for (string::const_iterator i = seq.begin(); i < seq.end(); ++i) {
-    if (*i == 'A' || *i == 'a')
-      observation.push_back(0);
-    else if (*i == 'C' || *i == 'c')
-      observation.push_back(1);
-    else if (*i == 'G' || *i == 'g')
-      observation.push_back(2);
-    else if (*i == 'T' || *i == 't')
-      observation.push_back(3);
-    else {
-      // usually this case is N; then randomly assign one base
-      observation.push_back(gsl_rng_uniform_int(rng, 4));
-    }
-  }
-}
-    
-void
 load_hmm_parameter(const string &input_file,
     matrix &transition,
     matrix &emission,
@@ -134,12 +98,14 @@ load_hmm_parameter(const string &input_file,
 }
 
 void identify_repeats(const ProfileHMM &hmm,
-    const vector<int> &observation,
+    const string &chr_seq,
     const vector<size_t> &states,
     const string chr_name,
+    const bool SENSE_STRAND,
     vector<GenomicRegion> &coordinates) {
   const size_t model_len = hmm.Length();
   const size_t bg_state = state(0ul, 0, 1).index(model_len);
+  const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
       i < states.end() - 1; ++i) {
@@ -148,14 +114,22 @@ void identify_repeats(const ProfileHMM &hmm,
       start = j - states.begin();
     else if (*i != bg_state && *j == bg_state) {
       end = j - states.begin();
-      const vector<int> obs(observation.begin() + start,
-        observation.begin() + end);
+      const string obs = chr_seq.substr(start, end - start);
       double score =
-        hmm.PosteriorProb(true, obs) - log(end - start);
+        hmm.PosteriorProb(true, obs) - log(obs.length());
+      // there needs to be some sophisticated method to call a region
+      // as copy
       string name = score > 50 ? "COPY" : "X";
-      GenomicRegion new_copy(chr_name, start,
-        end, name, score, '+');
-      coordinates.push_back(new_copy);
+      if (SENSE_STRAND) {
+        GenomicRegion new_copy(chr_name, start,
+          end, name, score, '+');
+        coordinates.push_back(new_copy);
+      }
+      else {
+        GenomicRegion new_copy(chr_name, chr_len - end + 1,
+          chr_len - start + 1, name, score, '-');
+        coordinates.push_back(new_copy);
+      }
     }
   }
 }
@@ -229,15 +203,17 @@ main (int argc, const char **argv) {
       if (chr_seq.empty())
         throw SMITHLABException("could not find chrom: " + chrom->first);
 
-      vector<int> observation;
       vector<size_t> states;
-      seq_to_int(rng, chr_seq, observation);
       ProfileHMM hmm(transition, emission);
-      hmm.PosteriorDecoding(DEBUG, true, observation, states);
 
       vector<GenomicRegion> coordinates;
-      identify_repeats(hmm, observation, states,
-        chrom->first, coordinates);
+      hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
+      identify_repeats(hmm, chr_seq, states,
+        chrom->first, true, coordinates);
+      revcomp_inplace(chr_seq);
+      hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
+      identify_repeats(hmm, chr_seq, states,
+        chrom->first, true, coordinates);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {

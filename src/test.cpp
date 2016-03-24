@@ -400,7 +400,7 @@ make_hmm_parameter(const bool VERBOSE, const gsl_rng* rng,
 
 void identify_repeats(const vector<vector<double> > &transition,
     const vector<vector<double> > &emission,
-    const vector<int> &observation,
+    const string &observation,
     const vector<size_t> &states,
     ProfileHMM &hmm,
     const string chr_name,
@@ -415,8 +415,7 @@ void identify_repeats(const vector<vector<double> > &transition,
       start = j - states.begin();
     else if (*i != bg_state && *j == bg_state) {
       end = j - states.begin();
-      const vector<int> obs(observation.begin() + start,
-        observation.begin() + end);
+      const string obs = observation.substr(start, end - start - 1);
       double score =
         hmm.PosteriorProb(true, obs) - log(end - start);
       string name = score > 50 ? "COPY" : "X";
@@ -486,13 +485,11 @@ main (int argc, const char **argv) {
     // Decoding test
     vector<pair<char, size_t> > trace;
     vector<size_t> states;
-    vector<int> observation;
-    seq_to_int(rng, input_seq, observation);
     //log_odds_transform(emission);
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
-    hmm.PosteriorDecoding(false, true, observation, states);
+    hmm.PosteriorDecoding(false, true, input_seq, states);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
     //vector<GenomicRegion> coordinates;
@@ -506,7 +503,7 @@ main (int argc, const char **argv) {
 
     // Learning test
     hmm.Print();
-    hmm.Train(VERBOSE, 1e-4, 20, observation);
+    hmm.Train(VERBOSE, 1e-4, 20, input_seq);
     hmm.Print();
     //hmm.PosteriorDecoding(false, true, observation, states);
   }
@@ -525,7 +522,7 @@ main (int argc, const char **argv) {
       cout << "  Trace:\t";
       print_trace(trace);
       trace.clear();
-      hmm.ViterbiDecoding(VERBOSE, seq, trace);
+      //hmm.ViterbiDecoding(VERBOSE, seq, trace);
       cout << "  Decoded:\t";
       print_trace(trace);
       cout << endl;

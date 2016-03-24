@@ -157,9 +157,9 @@ ProfileHMM::state_idx_to_str(const size_t idx) const {
 
 double
 ProfileHMM::ViterbiDecoding(const bool VERBOSE,
-    const vector<int> &observation,
+    const string &observation,
     vector<pair<char, size_t> > &trace) const {
-  const size_t seq_len = observation.size();
+  const size_t seq_len = observation.length();
   // Note here: vm[i][j] corresponds to M_i on o_j, where i=0~L
   // vd[i][j]: i = 0~L-1 corresponds to D_1 ~ D_L
   // vi[i][j]: i = 0~L-1 corresponds to I_0 ~ I_L-1
@@ -180,14 +180,14 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
   for (size_t i = 1; i < seq_len + 1; ++i) {
     // M_1 only has one incoming transition from D_1
     vm[1][i] = vd[0][i-1] + transition[index_d(1)][index_m(1)]
-      + emission[index_m(1)][observation[i-1]]
-      - emission[index_i(0)][observation[i-1]];
+      + emission[index_m(1)][base2int(observation[i-1])]
+      - emission[index_i(0)][base2int(observation[i-1])];
     // I_1 only has two incoming transition including one from M_1
     vi[1][i] = max({
       vm[1][i-1] + transition[index_m(1)][index_i(1)],
       vi[1][i-1] + transition[index_i(1)][index_i(1)]})
-      + emission[index_i(1)][observation[i-1]]
-      - emission[index_i(0)][observation[i-1]];
+      + emission[index_i(1)][base2int(observation[i-1])]
+      - emission[index_i(0)][base2int(observation[i-1])];
     for (size_t j = 2; j < model_len; ++j) {
       // M_i
       vm[j][i] = max({
@@ -195,15 +195,15 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
         vi[j-1][i-1] + transition[index_i(j-1)][index_m(j)],
         vd[j-2][i-1] + transition[index_d(j-1)][index_m(j)],
         vd[0][i-1] + transition[index_d(1)][index_m(j)]})
-        + emission[index_m(j)][observation[i-1]]
-        - emission[index_i(0)][observation[i-1]];
+        + emission[index_m(j)][base2int(observation[i-1])]
+        - emission[index_i(0)][base2int(observation[i-1])];
       // I_i
       vi[j][i] = max({
         vm[j][i-1] + transition[index_m(j)][index_i(j)],
         vi[j][i-1] + transition[index_i(j)][index_i(j)],
         vd[j-1][i-1] + transition[index_d(j)][index_i(j)]})
-        + emission[index_i(j)][observation[i-1]]
-        - emission[index_i(0)][observation[i-1]];
+        + emission[index_i(j)][base2int(observation[i-1])]
+        - emission[index_i(0)][base2int(observation[i-1])];
       // D_i
       if (j > 2)
         vd[j-1][i] = max({
@@ -224,8 +224,8 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
       vd[model_len-2][i-1]
         + transition[index_d(model_len-1)][index_m(model_len)],
       vd[0][i-1] + transition[index_d(1)][index_m(model_len)]})
-      + emission[index_m(model_len)][observation[i-1]]
-      - emission[index_i(0)][observation[i-1]];
+      + emission[index_m(model_len)][base2int(observation[i-1])]
+      - emission[index_i(0)][base2int(observation[i-1])];
     // I_model_len does not exist
     // D_model_len
     vector<double> list;
@@ -423,9 +423,9 @@ ProfileHMM::ViterbiDecoding(const bool VERBOSE,
 void
 ProfileHMM::forward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
-    const vector<int> &observation,
+    const string &observation,
     matrix &forward) const {
-  const size_t seq_len = observation.size();
+  const size_t seq_len = observation.length();
   forward.resize(total_size, vector<double>(seq_len+1, LOG_ZERO));
 
   forward[0][0] = 0;
@@ -446,12 +446,12 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
           if (USE_LOG_ODDS)
             forward[i->first][pos] =
               smithlab::log_sum_log_vec(list, list.size())
-              + emission[i->first][observation[pos-1]]
-              - emission[index_i(0)][observation[pos-1]];
+              + emission[i->first][base2int(observation[pos-1])]
+              - emission[index_i(0)][base2int(observation[pos-1])];
           else
             forward[i->first][pos] =
               smithlab::log_sum_log_vec(list, list.size())
-              + emission[i->first][observation[pos-1]];
+              + emission[i->first][base2int(observation[pos-1])];
         }
         else {
           for (vector<size_t>::const_iterator j = i->second.begin();
@@ -508,9 +508,9 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
 void
 ProfileHMM::backward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
-    const vector<int> &observation,
+    const string &observation,
     matrix &backward) const {
-  const size_t seq_len = observation.size();
+  const size_t seq_len = observation.length();
   backward.resize(total_size, vector<double>(seq_len+1, LOG_ZERO));
 
   // Initialization
@@ -532,12 +532,12 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
             if (USE_LOG_ODDS)
               list.push_back(backward[*j][pos+1]
                   + transition[i->first][*j]
-                  + emission[*j][observation[pos]]
-                  - emission[index_i(0)][observation[pos]]);
+                  + emission[*j][base2int(observation[pos])]
+                  - emission[index_i(0)][base2int(observation[pos])]);
             else
               list.push_back(backward[*j][pos+1]
                   + transition[i->first][*j]
-                  + emission[*j][observation[pos]]);
+                  + emission[*j][base2int(observation[pos])]);
           }
           else {
             // *j is a D state without viable emission
@@ -598,8 +598,8 @@ void
 ProfileHMM::Train(const bool VERBOSE,
     const double tolerance,
     const size_t max_iterations,
-    const vector<int> &observation) {
-  const size_t seq_len = observation.size();
+    const string &observation) {
+  const size_t seq_len = observation.length();
   matrix forward, backward;
   forward_algorithm(false, false, observation, forward);
   backward_algorithm(false, false, observation, backward);
@@ -628,7 +628,7 @@ ProfileHMM::Train(const bool VERBOSE,
           if (is_emission_state(*j)) {
             if (pos < seq_len)
               list.push_back(forward[i][pos] + transition[i][*j]
-                  + emission[*j][observation[pos]]
+                  + emission[*j][base2int(observation[pos])]
                   + backward[*j][pos + 1]);
           }
           else {
@@ -643,7 +643,8 @@ ProfileHMM::Train(const bool VERBOSE,
     for (size_t i = index_m(1); i < index_d(1); ++i) {
       matrix list(4, vector<double>());
       for (size_t pos = 0; pos < seq_len; ++pos) {
-        list[observation[pos]].push_back(forward[i][pos+1] + backward[i][pos+1]);
+        list[base2int(observation[pos])].push_back(
+            forward[i][pos+1] + backward[i][pos+1]);
       }
       for (size_t k = 0; k < 4; ++k) {
         e_emiss[i][k] =
@@ -728,9 +729,10 @@ ProfileHMM::SampleSequence(const bool VERBOSE,
 void
 ProfileHMM::PosteriorDecoding(const bool DEBUG,
     const bool USE_LOG_ODDS,
-    const vector<int> &observation,
+    const string &observation,
     vector<size_t> &states) const {
-  const size_t seq_len = observation.size();
+  const size_t seq_len = observation.length();
+  states.clear();
   matrix forward, backward;
 
   forward_algorithm(false, USE_LOG_ODDS, observation, forward);
@@ -755,7 +757,7 @@ ProfileHMM::PosteriorDecoding(const bool DEBUG,
 
 double
 ProfileHMM::PosteriorProb(const bool USE_LOG_ODDS,
-    const vector<int> &observation) const {
+    const string &observation) const {
   matrix forward;
 
   forward_algorithm(false, USE_LOG_ODDS, observation, forward);
