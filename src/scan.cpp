@@ -116,10 +116,8 @@ void identify_repeats(const ProfileHMM &hmm,
       end = j - states.begin();
       const string obs = chr_seq.substr(start, end - start);
       double score =
-        hmm.PosteriorProb(true, obs) - log(obs.length());
-      // there needs to be some sophisticated method to call a region
-      // as copy
-      string name = score > 50 ? "COPY" : "X";
+        hmm.PosteriorProb(true, obs) / obs.length();
+      string name = "X";
       if (SENSE_STRAND) {
         GenomicRegion new_copy(chr_name, start,
           end, name, score, '+');
@@ -131,6 +129,31 @@ void identify_repeats(const ProfileHMM &hmm,
         coordinates.push_back(new_copy);
       }
     }
+  }
+}
+
+void
+zscore_filter(vector<GenomicRegion> &coordinates,
+    const double CUT_OFF) {
+  // apply z-score filter to find most likely true copies
+  vector<double> scores;
+  for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
+      i < coordinates.end(); ++i) {
+    if ((*i).get_name() == "X")
+      scores.push_back((*i).get_score());
+  }
+  const double mean = std::accumulate(scores.begin(),
+      scores.end(), 0.0) / scores.size();
+  const double stdev = std::inner_product(scores.begin(),
+      scores.end(), scores.begin(), 0.0) / scores.size()
+    - mean * mean;
+  for (vector<GenomicRegion>::iterator i = coordinates.begin();
+      i < coordinates.end(); ++i) {
+    (*i).set_score(std::abs((*i).get_score() - mean) / stdev);
+    if ((*i).get_score() > CUT_OFF)
+      (*i).set_name("COPY");
+    else
+      (*i).set_name("X");
   }
 }
 
@@ -194,8 +217,6 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
 
-    if (VERBOSE)
-      cerr << "[SCANNING]" << endl;
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
       string chr_seq;
@@ -206,14 +227,19 @@ main (int argc, const char **argv) {
       vector<size_t> states;
       ProfileHMM hmm(transition, emission);
 
+      if (VERBOSE)
+        cerr << "[SCANNING 1/2]" << endl;
       vector<GenomicRegion> coordinates;
       hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
         chrom->first, true, coordinates);
+      if (VERBOSE)
+        cerr << "[SCANNING 2/2]" << endl;
       revcomp_inplace(chr_seq);
       hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
-        chrom->first, true, coordinates);
+        chrom->first, false, coordinates);
+      zscore_filter(coordinates, 3.0);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {

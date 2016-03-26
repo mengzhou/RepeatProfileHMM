@@ -606,7 +606,7 @@ ProfileHMM::Train(const bool VERBOSE,
   double ll = -1e10;
   double ll_new = posterior_prob(forward);
   if (VERBOSE)
-    cout << "ITR\tDELTA" << endl;
+    cerr << "ITR\tPREV_LL\tCURR_LL\tDELTA" << endl;
   for (size_t itr = 0;
       //itr < max_iterations;
       std::abs((ll_new - ll)/ll_new) > tolerance && itr < max_iterations;
@@ -690,8 +690,9 @@ ProfileHMM::Train(const bool VERBOSE,
     // Need some function for posterior probability here!
     ll_new = posterior_prob(forward);
     if (VERBOSE) {
-      cout << itr + 1 << "/" << max_iterations << "\t"
-        << ll << "\t" << ll_new << "\t" << std::setprecision(6)
+      cerr << itr + 1 << "/" << max_iterations << "\t"
+        << std::setprecision(6)
+        << ll << "\t" << ll_new << "\t" 
         << std::abs((ll_new - ll)/ll_new) << endl;
     }
   }
