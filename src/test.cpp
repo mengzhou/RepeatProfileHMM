@@ -447,7 +447,7 @@ main (int argc, const char **argv) {
   vector<string> leftover_args;
   opt_parse.parse(argc, argv, leftover_args);
 
-  if (!leftover_args.empty() || in_par.compare(out_par) == 0) {
+  if (in_par.compare(out_par) == 0) {
     cout << opt_parse.help_message() << endl
       << opt_parse.about_message() << endl;
     return EXIT_SUCCESS;
@@ -502,9 +502,13 @@ main (int argc, const char **argv) {
     //}
 
     // Learning test
-    hmm.Print();
+    //if (!leftover_args.empty()) {
+    //  ProfileHMM h(leftover_args.front());
+    //  h.Print(cout, true);
+    //}
+    hmm.Print(cout, true);
     hmm.Train(VERBOSE, 1e-4, 20, input_seq);
-    hmm.Print();
+    hmm.Print(cout, true);
     //hmm.PosteriorDecoding(false, true, observation, states);
   }
   else {

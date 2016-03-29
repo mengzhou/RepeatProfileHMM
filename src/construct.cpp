@@ -551,7 +551,9 @@ main (int argc, const char **argv) {
     if (!outf.empty()) outfs.open(outf.c_str());
     ostream out(outf.empty() ? cout.rdbuf() : outfs.rdbuf());
 
-    write_hmm_parameter(VERBOSE, out, transition, emission);
+    //write_hmm_parameter(VERBOSE, out, transition, emission);
+    ProfileHMM hmm(transition, emission);
+    hmm.Print(out, false);
     if (VERBOSE)
       cerr << "[DONE]" << endl;
 
@@ -580,7 +582,7 @@ main (int argc, const char **argv) {
       cout << endl;
 
       ProfileHMM hmm(transition, emission);
-      hmm.Print();
+      hmm.Print(cout, true);
     }
   }
   catch (const SMITHLABException &e) {

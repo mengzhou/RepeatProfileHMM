@@ -204,9 +204,7 @@ main (int argc, const char **argv) {
     size_t model_len;
     if (VERBOSE)
       cerr << "[LOADING HMM]" << endl;
-    load_hmm_parameter(in_par, transition, emission, model_len);
-    // use log-odds for emission
-    log_odds_transform(emission);
+    ProfileHMM hmm(in_par);
     if (VERBOSE)
       cerr << "\tMODEL LENGTH=" << model_len << endl;
 
@@ -225,7 +223,6 @@ main (int argc, const char **argv) {
         throw SMITHLABException("could not find chrom: " + chrom->first);
 
       vector<size_t> states;
-      ProfileHMM hmm(transition, emission);
 
       if (VERBOSE)
         cerr << "[SCANNING 1/2]" << endl;
@@ -236,6 +233,7 @@ main (int argc, const char **argv) {
       if (VERBOSE)
         cerr << "[SCANNING 2/2]" << endl;
       revcomp_inplace(chr_seq);
+      hmm.ComplementBackground();
       hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
         chrom->first, false, coordinates);

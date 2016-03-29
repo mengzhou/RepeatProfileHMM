@@ -49,6 +49,7 @@ class ProfileHMM {
 public:
   ProfileHMM();
   ProfileHMM(const matrix &t, const matrix &e);
+  ProfileHMM(const std::string inf);
 
   double
   ViterbiDecoding(const bool VERBOSE,
@@ -78,10 +79,13 @@ public:
       const std::string &observation) const;
 
   void
-  Print(void) const;
+  Print(std::ostream& out, const bool HUM_READABLE) const;
 
   size_t
   Length(void) const;
+
+  void
+  ComplementBackground(void);
 
 private:
   size_t
@@ -121,13 +125,16 @@ private:
   get_viable_transitions_from(void);
 
   bool
-  is_emission_state(const size_t idx) const;
+  state_can_emit(const size_t idx) const;
 
   void
-  print_transition(void) const;
+  print_transition(std::ostream& out, const bool HUM_READABLE) const;
   
   void
-  print_emission(void) const;
+  print_emission(std::ostream& out, const bool HUM_READABLE) const;
+
+  void
+  load_from_file(const std::string inf);
 
   size_t model_len;
   size_t total_size;
@@ -136,8 +143,4 @@ private:
   matrix transition;
   matrix emission;
 };
-
-void
-log_odds_transform(matrix &emission);
-
 #endif

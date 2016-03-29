@@ -19,6 +19,7 @@
 
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 
 using std::vector;
@@ -27,6 +28,7 @@ using std::max;
 using std::string;
 using std::endl;
 using std::cout;
+using std::ostream;
 using std::cerr;
 using std::map;
 
@@ -117,9 +119,23 @@ ProfileHMM::ProfileHMM(const matrix &t,
   get_viable_transitions_from();
 }
 
+ProfileHMM::ProfileHMM(const string inf) {
+  load_from_file(inf);
+  get_viable_transitions_to();
+  get_viable_transitions_from();
+}
+
 size_t
 ProfileHMM::Length(void) const {
   return model_len;
+}
+
+void
+ProfileHMM::ComplementBackground(void) {
+  // When doing decoding for the reverse-complement strand,
+  // the background emission also needs to be complemented.
+  std::swap(emission[index_i(0)][0], emission[index_i(0)][3]);
+  std::swap(emission[index_i(0)][1], emission[index_i(0)][2]);
 }
 
 inline size_t
@@ -438,7 +454,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
         transitions_from.find(state_idx);
       if (i != transitions_from.end()) {
         vector<double> list;
-        if (is_emission_state(i->first)) {
+        if (state_can_emit(i->first)) {
           for (vector<size_t>::const_iterator j = i->second.begin();
               j < i->second.end(); ++j) {
             list.push_back(forward[*j][pos-1] + transition[*j][i->first]);
@@ -527,7 +543,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
         vector<double> list;
         for (vector<size_t>::const_reverse_iterator j = i->second.rbegin();
             j < i->second.rend(); ++j) {
-          if (is_emission_state(*j)) {
+          if (state_can_emit(*j)) {
             // *j is an M/I state with viable emission
             if (USE_LOG_ODDS)
               list.push_back(backward[*j][pos+1]
@@ -625,7 +641,7 @@ ProfileHMM::Train(const bool VERBOSE,
           j < trans->second.end(); ++j) {
         vector<double> list;
         for (size_t pos = 0; pos <= seq_len; ++pos) {
-          if (is_emission_state(*j)) {
+          if (state_can_emit(*j)) {
             if (pos < seq_len)
               list.push_back(forward[i][pos] + transition[i][*j]
                   + emission[*j][base2int(observation[pos])]
@@ -691,7 +707,6 @@ ProfileHMM::Train(const bool VERBOSE,
     ll_new = posterior_prob(forward);
     if (VERBOSE) {
       cerr << itr + 1 << "/" << max_iterations << "\t"
-        << std::setprecision(6)
         << ll << "\t" << ll_new << "\t" 
         << std::abs((ll_new - ll)/ll_new) << endl;
     }
@@ -709,7 +724,7 @@ ProfileHMM::SampleSequence(const bool VERBOSE,
   while (idx < total_size - 1) {
     idx = random_weighted_sample(rng, transition[idx]);
     states.push_back(idx);
-    if (is_emission_state(idx)) {
+    if (state_can_emit(idx)) {
       seq.push_back(static_cast<int>(
             random_weighted_sample(rng, emission[idx])));
     }
@@ -871,124 +886,344 @@ ProfileHMM::get_viable_transitions_from(void) {
 }
 
 bool
-ProfileHMM::is_emission_state(const size_t idx) const {
+ProfileHMM::state_can_emit(const size_t idx) const {
   return idx >= index_m(1) && idx < index_d(1);
 }
 
 void
-ProfileHMM::Print(void) const {
-  cout << "Transition" << endl;
-  print_transition();
-  cout << "Emission" << endl;
-  print_emission();
+ProfileHMM::Print(ostream& out, const bool HUM_READABLE) const {
+  out << "#Model length: " << model_len << endl;
+  out << "#Transition" << endl;
+  print_transition(out, HUM_READABLE);
+  out << endl << "#Emission" << endl;
+  print_emission(out, HUM_READABLE);
+  out << "//" << endl;
 }
 
 void
-ProfileHMM::print_transition() const {
-  cout << "#M_0->I_0, M_0->D_1 = "
-    << exp(transition[0][state(0ul, 0, 1).index(model_len)]) << ", "
-    << exp(transition[0][state(0ul, 1, 2).index(model_len)]) << endl;
-  cout << "#M_i:" 
+ProfileHMM::print_transition(ostream& out, const bool HUM_READABLE) const {
+  const std::streamsize ss = out.precision();
+  if (HUM_READABLE)
+    out << std::setprecision(4) << std::fixed;
+  out << "#M_0\tI_0\tD_1" << endl << "\t";
+  if (HUM_READABLE)
+    out
+      << exp(transition[0][state(0ul, 0, 1).index(model_len)]) << "\t"
+      << exp(transition[0][state(0ul, 1, 2).index(model_len)]) << endl;
+  else
+    out
+      << transition[0][state(0ul, 0, 1).index(model_len)] << "\t"
+      << transition[0][state(0ul, 1, 2).index(model_len)] << endl;
+  out << "#pos_i:" 
     << "\t" << "M->M" << "\t" << "M->I" << "\t" << "M->D"
     << "\t" << "I->M" << "\t" << "I->I" << "\t" << "I->D"
     << "\t" << "D->M" << "\t" << "D->I" << "\t" << "D->D"
     << endl;
-  for (size_t i = 1; i < model_len; ++i) {
-    cout << i;
+  for (size_t i = 1; i < model_len - 1; ++i) {
+    out << i;
     // M
-    cout << std::setprecision(4) << std::fixed
-      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,i+1,0).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,i,1).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
-        [state(0ul,i+1,2).index(model_len)]);
+    if (HUM_READABLE)
+      out
+        << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
+          [state(0ul,i+1,0).index(model_len)])
+        << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
+          [state(0ul,i,1).index(model_len)])
+        << "\t" << exp(transition[state(0ul,i,0).index(model_len)]
+          [state(0ul,i+1,2).index(model_len)]);
+    else
+      out
+        << "\t" << transition[state(0ul,i,0).index(model_len)]
+          [state(0ul,i+1,0).index(model_len)]
+        << "\t" << transition[state(0ul,i,0).index(model_len)]
+          [state(0ul,i,1).index(model_len)]
+        << "\t" << transition[state(0ul,i,0).index(model_len)]
+          [state(0ul,i+1,2).index(model_len)];
     // I
-    cout
-      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
-        [state(0ul,i+1,0).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
-        [state(0ul,i,1).index(model_len)])
-      << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
-        [state(0ul,i+1,2).index(model_len)]);
+    if (HUM_READABLE)
+      out
+        << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
+          [state(0ul,i+1,0).index(model_len)])
+        << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
+          [state(0ul,i,1).index(model_len)])
+        << "\t" << exp(transition[state(0ul,i,1).index(model_len)]
+          [state(0ul,i+1,2).index(model_len)]);
+    else
+      out
+        << "\t" << transition[state(0ul,i,1).index(model_len)]
+          [state(0ul,i+1,0).index(model_len)]
+        << "\t" << transition[state(0ul,i,1).index(model_len)]
+          [state(0ul,i,1).index(model_len)]
+        << "\t" << transition[state(0ul,i,1).index(model_len)]
+          [state(0ul,i+1,2).index(model_len)];
     // D
     if (i > 1) {
-      cout
-        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
-          [state(0ul,i+1,0).index(model_len)])
-        << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
-          [state(0ul,i,1).index(model_len)]);
-      if (i < model_len - 1)
-        cout << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
+      if (HUM_READABLE)
+        out
+          << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
+            [state(0ul,i+1,0).index(model_len)])
+          << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
+            [state(0ul,i,1).index(model_len)])
+          << "\t" << exp(transition[state(0ul,i,2).index(model_len)]
             [state(0ul,i+1,2).index(model_len)]);
       else
-        cout << "\tnan";
+        out
+          << "\t" << transition[state(0ul,i,2).index(model_len)]
+            [state(0ul,i+1,0).index(model_len)]
+          << "\t" << transition[state(0ul,i,2).index(model_len)]
+            [state(0ul,i,1).index(model_len)]
+          << "\t" << transition[state(0ul,i,2).index(model_len)]
+            [state(0ul,i+1,2).index(model_len)];
     }
     else
-      cout << "\tnan\tnan\tnan";
-    cout << endl;
+      out << "\tnan\tnan\tnan";
+    out << endl;
   }
-  cout << endl << "#LOG\tT->M\tM->T" << endl;
+  out << model_len - 1;
+  if (HUM_READABLE)
+    out
+      // M_L-1
+      << "\t" << exp(transition[state(0ul,model_len-1,0).index(model_len)]
+        [state(0ul,model_len,0).index(model_len)])
+      << "\t" << exp(transition[state(0ul,model_len-1,0).index(model_len)]
+        [state(0ul,model_len-1,1).index(model_len)])
+      << "\t" << "nan"
+      // I_L-1
+      << "\t" << exp(transition[state(0ul,model_len-1,1).index(model_len)]
+        [state(0ul,model_len,0).index(model_len)])
+      << "\t" << exp(transition[state(0ul,model_len-1,1).index(model_len)]
+        [state(0ul,model_len-1,1).index(model_len)])
+      << "\t" << "nan"
+      // D_L-1
+      << "\t" << exp(transition[state(0ul,model_len-1,2).index(model_len)]
+        [state(0ul,model_len,0).index(model_len)])
+      << "\t" << exp(transition[state(0ul,model_len-1,2).index(model_len)]
+        [state(0ul,model_len-1,1).index(model_len)])
+      << "\t" << "nan";
+  else
+    out
+      << "\t" << transition[state(0ul,model_len-1,0).index(model_len)]
+        [state(0ul,model_len,0).index(model_len)]
+      << "\t" << transition[state(0ul,model_len-1,0).index(model_len)]
+        [state(0ul,model_len-1,1).index(model_len)]
+      << "\t" << "nan"
+      << "\t" << transition[state(0ul,model_len-1,1).index(model_len)]
+        [state(0ul,model_len,0).index(model_len)]
+      << "\t" << transition[state(0ul,model_len-1,1).index(model_len)]
+        [state(0ul,model_len-1,1).index(model_len)]
+      << "\t" << "nan"
+      << "\t" << transition[state(0ul,model_len-1,2).index(model_len)]
+        [state(0ul,model_len,0).index(model_len)]
+      << "\t" << transition[state(0ul,model_len-1,2).index(model_len)]
+        [state(0ul,model_len-1,1).index(model_len)]
+      << "\t" << "nan";
+
+  out << endl << "#LOG\t5'T->M\tM->3'T" << endl;
   for (size_t i = 1; i <= model_len; ++i) {
-    cout << i << std::setprecision(2)
+    out << i
       << "\t" << transition[state(0ul,1,2).index(model_len)]
         [state(0ul, i, 0).index(model_len)]
       << "\t" << transition[state(0ul,i,0).index(model_len)]
         [state(0ul,model_len,2).index(model_len)]
       << endl;
   }
-  cout << std::setprecision(4);
-  cout << endl << "#I_0\tI_0\tD_1\tE" << endl
-    << "\t" << exp(transition[state(0ul,0,1).index(model_len)]
-      [state(0ul,0,1).index(model_len)])
-    << "\t" << exp(transition[state(0ul,0,1).index(model_len)]
-      [state(0ul,1,2).index(model_len)])
-    << "\t" << exp(transition[state(0ul,0,1).index(model_len)].back())
-    << endl;
-  cout << endl << "#D_L\tI_0\tE" << endl
-    << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)]
-      [state(0ul,0,1).index(model_len)])
-    << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)].back())
-    << endl;
+  if (HUM_READABLE) {
+    out << "#I_0\tI_0\tD_1\tE" << endl
+      << "\t" << exp(transition[state(0ul,0,1).index(model_len)]
+        [state(0ul,0,1).index(model_len)])
+      << "\t" << exp(transition[state(0ul,0,1).index(model_len)]
+        [state(0ul,1,2).index(model_len)])
+      << "\t" << exp(transition[state(0ul,0,1).index(model_len)].back())
+      << endl;
+    out << "#D_L\tI_0\tE" << endl
+      << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)]
+        [state(0ul,0,1).index(model_len)])
+      << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)].back())
+      << endl;
+  }
+  else {
+    out << "#I_0\tI_0\tD_1\tE" << endl
+      << "\t" << transition[state(0ul,0,1).index(model_len)]
+        [state(0ul,0,1).index(model_len)]
+      << "\t" << transition[state(0ul,0,1).index(model_len)]
+        [state(0ul,1,2).index(model_len)]
+      << "\t" << transition[state(0ul,0,1).index(model_len)].back()
+      << endl;
+    out << "#D_L\tI_0\tE" << endl
+      << "\t" << transition[state(0ul,model_len,2).index(model_len)]
+        [state(0ul,0,1).index(model_len)]
+      << "\t" << transition[state(0ul,model_len,2).index(model_len)].back()
+      << endl;
+  }
+  out << std::setprecision(ss);
 }
 
 void
-ProfileHMM::print_emission() const {
-  cout << endl << "#M_i:" 
+ProfileHMM::print_emission(ostream& out, const bool HUM_READABLE) const {
+  const std::streamsize ss = out.precision();
+  if (HUM_READABLE)
+    out << std::setprecision(4) << std::fixed;
+  out << "#M_i:" 
     << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
   for (size_t i = 1; i <= model_len; ++i) {
-    cout << i;
-    cout << std::setprecision(4) << std::fixed
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][0])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][1])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][2])
-      << "\t" << exp(emission[state(0ul,i,0).index(model_len)][3])
-      << endl;
+    out << i;
+    if (HUM_READABLE)
+      out
+        << "\t" << exp(emission[state(0ul,i,0).index(model_len)][0])
+        << "\t" << exp(emission[state(0ul,i,0).index(model_len)][1])
+        << "\t" << exp(emission[state(0ul,i,0).index(model_len)][2])
+        << "\t" << exp(emission[state(0ul,i,0).index(model_len)][3])
+        << endl;
+    else
+      out
+        << "\t" << emission[state(0ul,i,0).index(model_len)][0]
+        << "\t" << emission[state(0ul,i,0).index(model_len)][1]
+        << "\t" << emission[state(0ul,i,0).index(model_len)][2]
+        << "\t" << emission[state(0ul,i,0).index(model_len)][3]
+        << endl;
   }
 
-  cout << endl << "#I_i:" 
+  out << endl << "#I_i:" 
     << "\t" << "A" << "\t" << "C" << "\t" << "G" << "\t" << "T" << endl;
   for (size_t i = 0; i < model_len; ++i) {
-    cout << i;
-    cout << std::setprecision(4)
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][0])
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][1])
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][2])
-      << "\t" << exp(emission[state(0ul,i,1).index(model_len)][3])
-      << endl;
+    out << i;
+    if (HUM_READABLE)
+      out
+        << "\t" << exp(emission[state(0ul,i,1).index(model_len)][0])
+        << "\t" << exp(emission[state(0ul,i,1).index(model_len)][1])
+        << "\t" << exp(emission[state(0ul,i,1).index(model_len)][2])
+        << "\t" << exp(emission[state(0ul,i,1).index(model_len)][3])
+        << endl;
+    else
+      out
+        << "\t" << emission[state(0ul,i,1).index(model_len)][0]
+        << "\t" << emission[state(0ul,i,1).index(model_len)][1]
+        << "\t" << emission[state(0ul,i,1).index(model_len)][2]
+        << "\t" << emission[state(0ul,i,1).index(model_len)][3]
+        << endl;
   }
+  out << std::setprecision(ss);
+}
+
+vector<string>
+split(const string s, const char delim = '\t') {
+  vector<string> v;
+  std::stringstream ss(s);
+  string item;
+  while(getline(ss, item, delim))
+    v.push_back(item);
+  return v;
 }
 
 void
-log_odds_transform(matrix &emission) {
-  const size_t model_len = (emission.size() - 2) / 3;
-  vector<double> bg = emission[state(0ul, 0, 1).index(model_len)];
-  for (size_t i = 0; i < model_len; ++i) {
-    for (size_t j = 0; j < emission.front().size(); ++j) {
-      emission[state(0ul, i+1, 0).index(model_len)][j] =
-        emission[state(0ul, i+1, 0).index(model_len)][j] - bg[j];
-      emission[state(0ul, i, 1).index(model_len)][j] =
-        emission[state(0ul, i, 1).index(model_len)][j] - bg[j];
+ProfileHMM::load_from_file(const string filename) {
+  std::ifstream in(filename.c_str());
+  if (!in)
+    throw SMITHLABException("cannot open input file " + filename);
+
+  vector<string> f;
+  string line;
+  getline(in, line);
+  f = split(line, ' ');
+  model_len = stoi(f.back());
+  total_size = model_len * 3 + 2;
+  transition.resize(total_size, vector<double>(total_size, LOG_ZERO));
+  emission.resize(total_size, vector<double>(4, LOG_ZERO));
+
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  f = split(line);
+  transition[0][state(0ul, 0, 1).index(model_len)] = stof(f[1]);
+  transition[0][state(0ul, 1, 2).index(model_len)] = stof(f[2]);
+
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  // general transition
+  while(line[0] != '#' && !line.empty()) {
+    f = split(line);
+    assert(f.size() == 10);
+    assert(stof(f[1]) < 0); // make sure the values are log transformed
+    const size_t i = stoi(f[0]);
+    // M_i
+    transition[state(0ul,i,0).index(model_len)]
+      [state(0ul,i+1,0).index(model_len)] = stof(f[1]);
+    transition[state(0ul,i,0).index(model_len)]
+      [state(0ul,i,1).index(model_len)] = stof(f[2]);
+    transition[state(0ul,i,0).index(model_len)]
+      [state(0ul,i+1,2).index(model_len)] =
+        f[3] == "nan" ? LOG_ZERO : stof(f[3]);
+    // I_i
+    transition[state(0ul,i,1).index(model_len)]
+      [state(0ul,i+1,0).index(model_len)] = stof(f[4]);
+    transition[state(0ul,i,1).index(model_len)]
+      [state(0ul,i,1).index(model_len)] = stof(f[5]);
+    transition[state(0ul,i,1).index(model_len)]
+      [state(0ul,i+1,2).index(model_len)] =
+        f[6] == "nan" ? LOG_ZERO : stof(f[6]);
+    // D_i
+    transition[state(0ul,i,2).index(model_len)]
+      [state(0ul,i+1,0).index(model_len)] =
+        f[7] == "nan" ? LOG_ZERO : stof(f[7]);
+    transition[state(0ul,i,2).index(model_len)]
+      [state(0ul,i,1).index(model_len)] =
+        f[8] == "nan" ? LOG_ZERO : stof(f[8]);
+    transition[state(0ul,i,2).index(model_len)]
+      [state(0ul,i+1,2).index(model_len)] =
+        f[9] == "nan" ? LOG_ZERO : stof(f[9]);
+    
+    getline(in, line);
+  }
+
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  // truncation
+  while(line[0] != '#' && !line.empty()) {
+    f = split(line);
+    assert(f.size() == 3);
+    assert(stof(f[1]) < 0); // make sure the values are log transformed
+    const size_t i = stoi(f[0]);
+    transition[state(0ul,1,2).index(model_len)]
+      [state(0ul, i, 0).index(model_len)] = stof(f[1]);
+    transition[state(0ul,i,0).index(model_len)]
+      [state(0ul,model_len,2).index(model_len)] = stof(f[2]);
+
+    getline(in, line);
+  }
+
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  // background transition probability
+  f = split(line);
+  transition[state(0ul,0,1).index(model_len)]
+    [state(0ul,0,1).index(model_len)] = stof(f[1]);
+  transition[state(0ul,0,1).index(model_len)]
+    [state(0ul,1,2).index(model_len)] = stof(f[2]);
+  transition[state(0ul,0,1).index(model_len)].back() = stof(f[3]);
+
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  // ending transition probability
+  f = split(line);
+  transition[state(0ul,model_len,2).index(model_len)]
+    [state(0ul,0,1).index(model_len)] = stof(f[1]);
+  transition[state(0ul,model_len,2).index(model_len)].back() = stof(f[2]);
+
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  // emission
+  while(line[0] != '#' && !line.empty()) {
+    f = split(line);
+    assert(f.size() == 5);
+    assert(stof(f[1]) < 0);
+    const size_t i = stoi(f[0]);
+    for (size_t j = 1; j < f.size(); j++) {
+      emission[state(0ul,i,0).index(model_len)][j-1] = stof(f[j]);
     }
+
+    getline(in, line);
+  }
+  while(getline(in, line) && (line[0] == '#' || line.empty()));
+  while(line[0] != '#' && !line.empty() && line[0] != '/') {
+    f = split(line);
+    assert(f.size() == 5);
+    assert(stof(f[1]) < 0);
+    const size_t i = stoi(f[0]);
+    for (size_t j = 1; j < f.size(); j++)
+      emission[state(0ul,i,1).index(model_len)][j-1] = stof(f[j]);
+
+    getline(in, line);
   }
 }
