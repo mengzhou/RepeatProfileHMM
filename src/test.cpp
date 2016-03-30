@@ -456,16 +456,19 @@ main (int argc, const char **argv) {
   gsl_rng *rng;
   rng = gsl_rng_alloc(gsl_rng_default);
   gsl_rng_set(rng, seed);
+  ProfileHMM hmm;
 
-  if (in_par.empty())
+  if (in_par.empty()) {
     make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
+    hmm = ProfileHMM(transition, emission);
+  }
   else
-    load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
+    //load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
+    hmm = ProfileHMM(in_par);
 
   if (!out_par.empty())
     write_hmm_parameter(VERBOSE, out_par, transition, emission);
 
-  ProfileHMM hmm(transition, emission);
   vector<string> chrom_names, ref_chroms;
   // decoding test
   if (!input.empty()) {
@@ -489,7 +492,7 @@ main (int argc, const char **argv) {
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
-    hmm.PosteriorDecoding(false, true, input_seq, states);
+    hmm.PosteriorDecoding(false, false, true, input_seq, states);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
     //vector<GenomicRegion> coordinates;
@@ -508,8 +511,7 @@ main (int argc, const char **argv) {
     //}
     hmm.Print(cout, true);
     hmm.Train(VERBOSE, 1e-4, 20, input_seq);
-    hmm.Print(cout, true);
-    //hmm.PosteriorDecoding(false, true, observation, states);
+    hmm.Print(cout, false);
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {

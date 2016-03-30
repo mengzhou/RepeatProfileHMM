@@ -50,6 +50,8 @@ public:
   ProfileHMM();
   ProfileHMM(const matrix &t, const matrix &e);
   ProfileHMM(const std::string inf);
+  ProfileHMM(const ProfileHMM &other);
+  ProfileHMM &operator=(const ProfileHMM &rhs);
 
   double
   ViterbiDecoding(const bool VERBOSE,
@@ -70,6 +72,7 @@ public:
 
   void
   PosteriorDecoding(const bool VERBOSE,
+      const bool DEBUG,
       const bool USE_LOG_ODDS,
       const std::string &observation,
       std::vector<size_t> &states) const;

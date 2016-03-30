@@ -28,6 +28,7 @@ using std::max;
 using std::string;
 using std::endl;
 using std::cout;
+using std::cerr;
 using std::ostream;
 using std::cerr;
 using std::map;
@@ -123,6 +124,27 @@ ProfileHMM::ProfileHMM(const string inf) {
   load_from_file(inf);
   get_viable_transitions_to();
   get_viable_transitions_from();
+}
+
+ProfileHMM::ProfileHMM(const ProfileHMM &other) {
+  model_len = other.model_len;
+  total_size = other.total_size;
+  transition = other.transition;
+  emission = other.emission;
+  get_viable_transitions_to();
+  get_viable_transitions_from();
+}
+
+ProfileHMM&
+ProfileHMM::operator=(const ProfileHMM &rhs) {
+  ProfileHMM tmp(rhs);
+  std::swap(model_len, tmp.model_len);
+  std::swap(total_size, tmp.total_size);
+  std::swap(transition, tmp.transition);
+  std::swap(emission, tmp.emission);
+  get_viable_transitions_to();
+  get_viable_transitions_from();
+  return *this;
 }
 
 size_t
@@ -441,6 +463,8 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &forward) const {
+  if (VERBOSE)
+    cerr << "FORWARD ALGORITHM" << endl;
   const size_t seq_len = observation.length();
   forward.resize(total_size, vector<double>(seq_len+1, LOG_ZERO));
 
@@ -448,6 +472,8 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
   forward[index_d(1)][0] = transition[index_m(0)][index_d(1)];
 
   for (size_t pos = 1; pos < seq_len + 1; ++pos) {
+    if (VERBOSE && pos % 10000 == 0)
+      cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
     for (size_t state_idx = 0; state_idx < total_size; ++state_idx) {
       // states with emission: M/I
       const map<size_t, vector<size_t> >::const_iterator i = 
@@ -480,45 +506,6 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
       }
     }
   }
-
-  if (VERBOSE) {
-    cout << endl << "#Forward" << endl;
-    cout << "#M";
-    for (size_t i = 1; i <= model_len; ++i) {
-      cout << "\tM" << i;
-    }
-    cout << endl;
-    for (size_t pos = 1; pos < seq_len +1; ++pos) {
-      for (size_t i = 1; i <= model_len; ++i) {
-        cout << pos << "\t" << forward[i][pos];
-      }
-      cout << endl;
-    }
-
-    cout << endl << "#I";
-    for (size_t i = 0; i < model_len; ++i) {
-      cout << "\tI" << i;
-    }
-    cout << endl;
-    for (size_t pos = 1; pos < seq_len +1; ++pos) {
-      for (size_t i = 0; i < model_len; ++i) {
-        cout << pos << "\t" << forward[index_i(i)][pos];
-      }
-      cout << endl;
-    }
-
-    cout << endl << "#D";
-    for (size_t i = 1; i <= model_len; ++i) {
-      cout << "\tD" << i;
-    }
-    cout << endl;
-    for (size_t pos = 1; pos < seq_len +1; ++pos) {
-      for (size_t i = 1; i <= model_len; ++i) {
-        cout << pos << "\t" << forward[index_d(i)][pos];
-      }
-      cout << endl;
-    }
-  }
 }
 
 void
@@ -526,6 +513,8 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &backward) const {
+  if (VERBOSE)
+    cerr << "BACKWARD ALGORITHM" << endl;
   const size_t seq_len = observation.length();
   backward.resize(total_size, vector<double>(seq_len+1, LOG_ZERO));
 
@@ -535,6 +524,8 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
 
   // loop is going backwards
   for (signed long pos = seq_len - 1; pos >= 0; --pos) {
+    if (VERBOSE && pos % 10000 == 0)
+      cerr << "\tPROCESSED " << 100 - 100 * pos / seq_len << "%" << endl;
     for (signed long state_idx = total_size - 1;
         state_idx >= 0; --state_idx) {
       const map<size_t, vector<size_t> >::const_iterator i = 
@@ -569,45 +560,6 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
       }
     }
   }
-
-  if (VERBOSE) {
-    cout << endl << "#Backward" << endl;
-    cout << "#M";
-    for (size_t i = 1; i <= model_len; ++i) {
-      cout << "\tM" << i;
-    }
-    cout << endl;
-    for (size_t pos = 1; pos < seq_len +1; ++pos) {
-      for (size_t i = 1; i <= model_len; ++i) {
-        cout << pos << "\t" << backward[i][pos];
-      }
-      cout << endl;
-    }
-
-    cout << endl << "#I";
-    for (size_t i = 0; i < model_len; ++i) {
-      cout << "\tI" << i;
-    }
-    cout << endl;
-    for (size_t pos = 1; pos < seq_len +1; ++pos) {
-      for (size_t i = 0; i < model_len; ++i) {
-        cout << pos << "\t" << backward[index_i(i)][pos];
-      }
-      cout << endl;
-    }
-
-    cout << endl << "#D";
-    for (size_t i = 1; i <= model_len; ++i) {
-      cout << "\tD" << i;
-    }
-    cout << endl;
-    for (size_t pos = 1; pos < seq_len +1; ++pos) {
-      for (size_t i = 1; i <= model_len; ++i) {
-        cout << pos << "\t" << backward[index_d(i)][pos];
-      }
-      cout << endl;
-    }
-  }
 }
 
 void
@@ -617,8 +569,8 @@ ProfileHMM::Train(const bool VERBOSE,
     const string &observation) {
   const size_t seq_len = observation.length();
   matrix forward, backward;
-  forward_algorithm(false, false, observation, forward);
-  backward_algorithm(false, false, observation, backward);
+  forward_algorithm(VERBOSE, false, observation, forward);
+  backward_algorithm(VERBOSE, false, observation, backward);
   double ll = -1e10;
   double ll_new = posterior_prob(forward);
   if (VERBOSE)
@@ -743,7 +695,8 @@ ProfileHMM::SampleSequence(const bool VERBOSE,
 }
 
 void
-ProfileHMM::PosteriorDecoding(const bool DEBUG,
+ProfileHMM::PosteriorDecoding(const bool VERBOSE,
+    const bool DEBUG,
     const bool USE_LOG_ODDS,
     const string &observation,
     vector<size_t> &states) const {
@@ -751,8 +704,8 @@ ProfileHMM::PosteriorDecoding(const bool DEBUG,
   states.clear();
   matrix forward, backward;
 
-  forward_algorithm(false, USE_LOG_ODDS, observation, forward);
-  backward_algorithm(false, USE_LOG_ODDS, observation, backward);
+  forward_algorithm(VERBOSE, USE_LOG_ODDS, observation, forward);
+  backward_algorithm(VERBOSE, USE_LOG_ODDS, observation, backward);
 
   vector<double> xi(index_d(1), LOG_ZERO);
   for (size_t i = 1; i <= seq_len; ++i) {

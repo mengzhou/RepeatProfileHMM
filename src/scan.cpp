@@ -200,13 +200,11 @@ main (int argc, const char **argv) {
     rng = gsl_rng_alloc(gsl_rng_default);
     gsl_rng_set(rng, seed);
 
-    matrix transition, emission;
-    size_t model_len;
     if (VERBOSE)
       cerr << "[LOADING HMM]" << endl;
     ProfileHMM hmm(in_par);
     if (VERBOSE)
-      cerr << "\tMODEL LENGTH=" << model_len << endl;
+      cerr << "\tMODEL LENGTH=" << hmm.Length() << endl;
 
     if (VERBOSE)
       cerr << "[LOADING GENOME]" << endl;
@@ -227,14 +225,14 @@ main (int argc, const char **argv) {
       if (VERBOSE)
         cerr << "[SCANNING 1/2]" << endl;
       vector<GenomicRegion> coordinates;
-      hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
+      hmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
         chrom->first, true, coordinates);
       if (VERBOSE)
         cerr << "[SCANNING 2/2]" << endl;
       revcomp_inplace(chr_seq);
       hmm.ComplementBackground();
-      hmm.PosteriorDecoding(DEBUG, true, chr_seq, states);
+      hmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
         chrom->first, false, coordinates);
       zscore_filter(coordinates, 3.0);

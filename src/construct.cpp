@@ -561,28 +561,25 @@ main (int argc, const char **argv) {
     if (DEBUG) {
       for (unordered_map<string, string>::const_iterator i = msa.begin();
           i != msa.end(); ++i)
-        cout << i->first << "\t" << i->second << endl;
-      cout << std::setw(25);
+        cerr << i->first << "\t" << i->second << endl;
+      cerr << std::setw(25);
       for (size_t i = 0; i < marked_cols.size(); ++i) {
         if (marked_cols[i])
-          cout << "*";
+          cerr << "*";
         else
-          cout << " ";
+          cerr << " ";
       }
-      cout << endl;
+      cerr << endl;
       vector<bool> marked_heu((msa.begin()->second).length(), false);
       find_marked_cols_heu(marked_heu, msa);
-      cout << std::setw(25);
+      cerr << std::setw(25);
       for (size_t i = 0; i < marked_heu.size(); ++i) {
         if (marked_heu[i])
-          cout << "#";
+          cerr << "#";
         else
-          cout << " ";
+          cerr << " ";
       }
-      cout << endl;
-
-      ProfileHMM hmm(transition, emission);
-      hmm.Print(cout, true);
+      cerr << endl;
     }
   }
   catch (const SMITHLABException &e) {
