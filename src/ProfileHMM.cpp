@@ -183,7 +183,9 @@ ProfileHMM::index_d(const size_t idx) const {
 
 string
 ProfileHMM::state_idx_to_str(const size_t idx) const {
-  if (idx <= model_len)
+  if (idx == 0)
+    return "B";
+  else if (idx <= model_len)
     return "M" + std::to_string(idx);
   else if (idx <= model_len * 2)
     return "I" + std::to_string(idx - model_len - 1);
@@ -718,8 +720,28 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
   if (DEBUG) {
     cerr << "State sequence:" << endl;
     for (vector<size_t>::const_iterator i = states.begin();
-        i < states.end(); ++i) {
+        i < states.end(); ++i)
       cerr << i - states.begin() + 1 << "\t" << state_idx_to_str(*i) << endl;
+
+    cerr << endl << "Forward matrix:" << endl;
+    for (size_t j = 0; j < forward.front().size(); ++j)
+      cerr << "\t" << j;
+    for (size_t i = 0; i < forward.size(); ++i) {
+      cerr << endl << state_idx_to_str(i);
+      for (size_t j = 0; j < forward.front().size(); ++j) {
+        cerr << "\t" << exp(forward[i][j]);
+      }
+      cerr << endl;
+    }
+    cerr << endl << "Backward matrix:" << endl;
+    for (size_t j = 0; j < backward.front().size(); ++j)
+      cerr << "\t" << j;
+    for (size_t i = 0; i < backward.size(); ++i) {
+      cerr << endl << state_idx_to_str(i);
+      for (size_t j = 0; j < backward.front().size(); ++j) {
+        cerr << "\t" << exp(backward[i][j]);
+      }
+      cerr << endl;
     }
   }
 }
@@ -772,18 +794,20 @@ ProfileHMM::get_viable_transitions_to(void) {
   transitions_to[index_d(1)] = vector<size_t>();
   for (size_t i = 1; i <= model_len; ++i)
     transitions_to[index_d(1)].push_back(index_m(i));
-  // general: i~L-1
-  for (size_t i = 1; i < model_len; ++i) {
+  // general: i=1~L-2
+  for (size_t i = 1; i < model_len - 1; ++i) {
     transitions_to[index_m(i)] = vector<size_t>({index_m(i+1), index_i(i),
         index_d(i+1), index_d(model_len)});
-    if (i < model_len - 1) {
-      transitions_to[index_i(i)] =
+    transitions_to[index_i(i)] =
+      vector<size_t>({index_m(i+1), index_i(i), index_d(i+1)});
+    if (i > 1)
+      transitions_to[index_d(i)] =
         vector<size_t>({index_m(i+1), index_i(i), index_d(i+1)});
-      if (i > 1)
-        transitions_to[index_d(i)] =
-          vector<size_t>({index_m(i+1), index_i(i), index_d(i+1)});
-    }
   }
+  // M_L-1
+  transitions_to[index_m(model_len-1)] =
+    vector<size_t>({index_m(model_len), index_i(model_len-1),
+        index_d(model_len)});
   // I_L-1
   transitions_to[index_i(model_len-1)] =
     vector<size_t>({index_i(model_len-1), index_m(model_len)});

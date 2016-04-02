@@ -492,7 +492,7 @@ main (int argc, const char **argv) {
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
-    hmm.PosteriorDecoding(false, false, true, input_seq, states);
+    hmm.PosteriorDecoding(false, true, false, input_seq, states);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
     //vector<GenomicRegion> coordinates;
@@ -510,8 +510,8 @@ main (int argc, const char **argv) {
     //  h.Print(cout, true);
     //}
     hmm.Print(cout, true);
-    hmm.Train(VERBOSE, 1e-4, 20, input_seq);
-    hmm.Print(cout, false);
+    //hmm.Train(VERBOSE, 1e-4, 20, input_seq);
+    //hmm.Print(cout, false);
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {
