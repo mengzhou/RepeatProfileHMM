@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "ProfileHMM.hpp"
+//#include "MultiProfileHMM.hpp"
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
@@ -492,7 +493,7 @@ main (int argc, const char **argv) {
     //const double lh = 
     //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
     //print_trace(trace);
-    hmm.PosteriorDecoding(false, true, false, input_seq, states);
+    //hmm.PosteriorDecoding(false, true, false, input_seq, states);
     //state_to_trace(states, model_len, trace);
     //print_trace(trace);
     //vector<GenomicRegion> coordinates;
@@ -509,9 +510,15 @@ main (int argc, const char **argv) {
     //  ProfileHMM h(leftover_args.front());
     //  h.Print(cout, true);
     //}
-    hmm.Print(cout, true);
+    //hmm.Print(cout, true);
     //hmm.Train(VERBOSE, 1e-4, 20, input_seq);
     //hmm.Print(cout, false);
+    
+    //Multi family test
+    //ProfileHMM hmm(leftover_args.front());
+    //vector<ProfileHMM> model_list(3, ProfileHMM(leftover_args.front()));
+    //MultiProfileHMM mfhmm(model_list);
+    //mfhmm.Print();
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {

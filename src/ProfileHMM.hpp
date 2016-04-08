@@ -46,6 +46,7 @@ struct state {
 class ProfileHMM {
   // profile-HMM allowing local alignment and re-occurrence of M_i;
   // see Durbin book p.114 (bottom figure)
+friend class MultiProfileHMM;
 public:
   ProfileHMM();
   ProfileHMM(const matrix &t, const matrix &e);
