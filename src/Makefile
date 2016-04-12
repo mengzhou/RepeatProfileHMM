@@ -10,7 +10,7 @@ endif
 PROGS = test construct scan
 
 CXX = g++
-CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -static-libstdc++
+CXXFLAGS = -Wall -fmessage-length=50 -std=c++11#-static-libstdc++
 OPTFLAGS = -O2
 DEBUGFLAGS = -g
 
@@ -49,7 +49,9 @@ $(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
   	OptionParser.o GenomicRegion.o)\
   	matrix_utils.o ProfileHMM.o
 
-#test: MultiProfileHMM.o
+test: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
+  	OptionParser.o GenomicRegion.o)\
+  	matrix_utils.o ProfileHMM.o MultiProfileHMM.o
 
 %.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $< $(INCLUDEARGS)

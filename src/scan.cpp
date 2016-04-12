@@ -25,7 +25,7 @@
 #include <sstream>
 #include <random>
 #include <gsl/gsl_randist.h>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -36,7 +36,7 @@
 
 using std::vector;
 using std::string;
-using std::tr1::unordered_map;
+using std::unordered_map;
 using std::ifstream;
 using std::istringstream;
 using std::ostream;

@@ -30,7 +30,7 @@
 #include <unistd.h>
 
 #include "ProfileHMM.hpp"
-//#include "MultiProfileHMM.hpp"
+#include "MultiProfileHMM.hpp"
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
@@ -515,10 +515,10 @@ main (int argc, const char **argv) {
     //hmm.Print(cout, false);
     
     //Multi family test
-    //ProfileHMM hmm(leftover_args.front());
-    //vector<ProfileHMM> model_list(3, ProfileHMM(leftover_args.front()));
-    //MultiProfileHMM mfhmm(model_list);
-    //mfhmm.Print();
+    ProfileHMM hmm(leftover_args.front());
+    vector<ProfileHMM> model_list(3, ProfileHMM(leftover_args.front()));
+    MultiProfileHMM mfhmm(model_list);
+    mfhmm.Print();
   }
   else {
     for (size_t i = 1; i <= 3; ++i) {
