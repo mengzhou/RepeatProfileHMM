@@ -33,10 +33,25 @@ public:
   //operator+;
 private:
   void
+  forward_algorithm(const bool VERBOSE,
+      const bool USE_LOG_ODDS,
+      const std::string &observation,
+      matrix &forward) const;
+
+  void
+  backward_algorithm(const bool VERBOSE,
+      const bool USE_LOG_ODDS,
+      const std::string &observation,
+      matrix &backward) const;
+
+  void
   get_viable_transitions_to(void);
 
   void
   get_viable_transitions_from(void);
+
+  void
+  set_transition(void);
 
   bool
   state_can_emit(const multihmm_state state) const;

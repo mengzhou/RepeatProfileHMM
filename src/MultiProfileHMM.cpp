@@ -18,14 +18,18 @@
 #include <map>
 #include <vector>
 #include <utility>
+#include <string>
 
 #include "MultiProfileHMM.hpp"
 
 using std::vector;
 using std::pair;
 using std::make_pair;
+using std::map;
 using std::cout;
+using std::cerr;
 using std::endl;
+using std::string;
 
 MultiProfileHMM::MultiProfileHMM(vector<ProfileHMM> &v) {
   num_states = 2;
@@ -82,6 +86,11 @@ MultiProfileHMM::get_viable_transitions_from(void) {
   }
 }
 
+void
+MultiProfileHMM::set_transition(void) {
+  transition.resize(num_states, vector<double>(num_states, LOG_ZERO));
+}
+
 bool
 MultiProfileHMM::state_can_emit(multihmm_state state) const {
   if (state.first == &dummy_this) {
@@ -108,9 +117,9 @@ MultiProfileHMM::forward_algorithm(const bool VERBOSE,
     // E_0 to B_0
     if (pos > 0)
       forward[pos][0] = forward[pos].back() + transition.back()[0];
+    vector<double> ending_list;
     for (vector<ProfileHMM*>::const_iterator model = models.begin();
         model < models.end(); ++model) {
-      vector<double> ending_list;
       // B_0 to B_i
       forward[pos][offset] = forward[pos][0]
         + transition[0][model - models.begin() + 1];
@@ -168,7 +177,7 @@ MultiProfileHMM::forward_algorithm(const bool VERBOSE,
 }
 
 void
-ProfileHMM::backward_algorithm(const bool VERBOSE,
+MultiProfileHMM::backward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &backward) const {
@@ -241,7 +250,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
     for (vector<ProfileHMM*>::const_iterator model = models.begin();
         model < models.end(); ++model) {
       const size_t idx_d_L = (**model).index_d((**model).model_len);
-      const size_t idx_e = (**model).total_size - 1
+      const size_t idx_e = (**model).total_size - 1;
       backward[pos][offset + idx_e] =
         backward[pos].back() + transition[model - models.begin() + 1].back();
       backward[pos][offset + idx_d_L] = backward[pos][offset + idx_e]
@@ -289,7 +298,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
             smithlab::log_sum_log_vec(list, list.size());
         }
       }
+      offset += (**model).total_size;
     }
-    offset += (**model).total_size;
   }
 }

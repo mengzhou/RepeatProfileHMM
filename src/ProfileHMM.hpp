@@ -105,13 +105,13 @@ private:
   state_idx_to_str(const size_t idx) const;
 
   void
-  forward_algorithm(const bool DEBUG,
+  forward_algorithm(const bool VERBOSE,
       const bool USE_LOG_ODDS,
       const std::string &observation,
       matrix &forward) const;
 
   void
-  backward_algorithm(const bool DEBUG,
+  backward_algorithm(const bool VERBOSE,
       const bool USE_LOG_ODDS,
       const std::string &observation,
       matrix &backward) const;
