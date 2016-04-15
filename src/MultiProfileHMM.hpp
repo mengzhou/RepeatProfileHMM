@@ -28,6 +28,13 @@ public:
   MultiProfileHMM(std::vector<ProfileHMM> &v);
 
   void
+  PosteriorDecoding(const bool VERBOSE,
+      const bool DEBUG,
+      const bool USE_LOG_ODDS,
+      const std::string &observation,
+      std::vector<size_t> &states) const;
+
+  void
   Print(void);
 
   //operator+;
@@ -56,10 +63,14 @@ private:
   bool
   state_can_emit(const multihmm_state state) const;
 
+  std::string
+  state_idx_to_str(const size_t idx) const;
+
   std::vector<ProfileHMM*> models;
   matrix transition;
   size_t num_models;
   size_t num_states;
+  size_t num_columns; // sum of individual model lengths
 
   std::map<multihmm_state, std::vector<multihmm_state> > transitions_to;
   std::map<multihmm_state, std::vector<multihmm_state> > transitions_from;

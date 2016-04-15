@@ -10,7 +10,7 @@ endif
 PROGS = test construct scan
 
 CXX = g++
-CXXFLAGS = -Wall -fmessage-length=50 -std=c++11#-static-libstdc++
+CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -static-libstdc++
 OPTFLAGS = -O2
 DEBUGFLAGS = -g
 
@@ -36,7 +36,7 @@ LIBS += -L/usr/local/lib
 #ifeq "$(shell if [ `sysctl -n kern.osrelease | cut -d . -f 1` -ge 13 ];\
 #              then echo 'true'; fi)" "true"
 #CXXFLAGS += -stdlib=libstdc++
-endif
+#endif
 endif
 
 all: $(PROGS)

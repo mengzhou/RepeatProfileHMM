@@ -142,6 +142,7 @@ private:
 
   size_t model_len;
   size_t total_size;
+  std::string name;
   std::map<size_t, std::vector<size_t> > transitions_to;
   std::map<size_t, std::vector<size_t> > transitions_from;
   matrix transition;

@@ -33,14 +33,15 @@ using std::string;
 
 MultiProfileHMM::MultiProfileHMM(vector<ProfileHMM> &v) {
   num_states = 2;
+  num_columns = 0;
   for (vector<ProfileHMM>::iterator i = v.begin();
       i < v.end(); ++i) {
     models.push_back(&*i);
     num_states += (*i).total_size;
+    num_columns += (*i).model_len;
   }
   num_models = models.size();
-  transition.resize(num_models + 2,
-      vector<double>(num_models + 2, log(1.0/num_models)));
+  set_transition();
 }
 
 void
@@ -88,7 +89,17 @@ MultiProfileHMM::get_viable_transitions_from(void) {
 
 void
 MultiProfileHMM::set_transition(void) {
-  transition.resize(num_states, vector<double>(num_states, LOG_ZERO));
+  transition.resize(num_models+2, vector<double>(num_models+2, LOG_ZERO));
+  // Set transitions of B_0 to B^i
+  for (vector<double>::iterator i = transition.front().begin()+1;
+      i < transition.front().end()-1; ++i)
+    *i = log(1.0/num_models);
+  // Set transitions of E^i to E_0
+  for (matrix::iterator i = transition.begin()+1;
+      i < transition.end()-1; ++i)
+    (*i).back() = 0.0;
+  // Set transition of E_0 to B_0
+  transition.back().front() = 0.0;
 }
 
 bool
@@ -105,24 +116,47 @@ MultiProfileHMM::forward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &forward) const {
+  /* Notations
+   * 1. B_0, E_0: the structural states that wraps all states of individual
+   *    family models;
+   * 2. B^i, E^i: the B and E states of individual model i;
+   * 3. M_j^i, I_j^i, D_j^i: the M, I, D states of individual model i.
+   *
+   * Matrix organization
+   * The forward matrix is a NxM matrix, where N is the length of
+   * the observation sequence, and M is calculated by:
+   * M = 2 + \sum_i L_i, i.e.
+   * B_0, B^1, M_1^1, ..., E^1, B^2, ..., E^k, E_0
+   */
   if (VERBOSE)
     cerr << "FORWARD ALGORITHM" << endl;
   const size_t seq_len = observation.length();
   forward.resize(seq_len+1, vector<double>(num_states, LOG_ZERO));
   forward[0][0] = 0.0;
+  // calculate B^i, D_1^i as initialization
+  size_t offset = 1;
+  for (vector<ProfileHMM*>::const_iterator model = models.begin();
+      model < models.end(); ++model) {
+    forward[0][offset] = forward[0][0] + transition[0][model-models.begin()+1];
+    const size_t idx_d_1 = (**model).index_d(1);
+    forward[0][offset+idx_d_1] = forward[0][offset]
+      + (**model).transition[0][idx_d_1];
+    offset += (**model).total_size;
+  }
+
+  // loop of forward algorithm starts from M_1^i for all model i,
+  // going through all emitting states, then non-emitting states:
+  // forward[pos][M_1^i] = sum_j(forward[pos-1][B^i] * transition...)
+  // otherwise, the forward[pos][state] for a state might depend on
+  // some other non-emitting state forward[pos][state'], which possibly
+  // has not been calculated.
   for (size_t pos = 0; pos < seq_len + 1; ++pos) {
     if (VERBOSE && pos % 10000 == 0)
       cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
-    size_t offset = 1;
-    // E_0 to B_0
-    if (pos > 0)
-      forward[pos][0] = forward[pos].back() + transition.back()[0];
+    offset = 1;
     vector<double> ending_list;
     for (vector<ProfileHMM*>::const_iterator model = models.begin();
         model < models.end(); ++model) {
-      // B_0 to B_i
-      forward[pos][offset] = forward[pos][0]
-        + transition[0][model - models.begin() + 1];
       for (size_t state_idx = 1;
           state_idx < (**model).total_size - 1; ++state_idx) {
         // states with emission: M/I
@@ -165,14 +199,39 @@ MultiProfileHMM::forward_algorithm(const bool VERBOSE,
           }
         }
       }
+      // D_L and I_0 to E^i
+      const size_t idx_d_l = (**model).index_d((**model).model_len);
+      const size_t idx_i_0 = (**model).index_i(0);
+      const size_t idx_e_i = (**model).total_size-1;
+      forward[pos][idx_e_i+offset] = log_sum_log(
+          forward[pos][idx_d_l+offset] + (**model).transition[idx_d_l][idx_e_i],
+          forward[pos][idx_i_0+offset] + (**model).transition[idx_i_0][idx_e_i]
+          );
+      // E^i to E_0
+      ending_list.push_back(forward[pos][idx_e_i+offset]
+          + transition[model-models.begin()+1].back());
       offset += (**model).total_size;
-      // E_i to E_0
-      ending_list.push_back(forward[pos][(**model).total_size - 1 + offset]
-          + transition[model - models.begin() + 1].back());
     }
-    // E_i to E_0
+    // E^i to E_0
     forward[pos].back() =
       smithlab::log_sum_log_vec(ending_list, ending_list.size());
+    // E_0 to B_0
+    if (pos > 0)
+      forward[pos][0] = forward[pos].back() + transition.back()[0];
+    // B_0 to B^i and D_1^i
+    offset = 1;
+    for (vector<ProfileHMM*>::const_iterator model = models.begin();
+        model < models.end(); ++model) {
+      const size_t idx_d_1 = (**model).index_d(1);
+      const size_t idx_i_0 = (**model).index_i(0);
+      forward[pos][offset] = forward[pos][0]
+        + transition[0][model-models.begin()+1];
+      forward[pos][idx_d_1+offset] = log_sum_log(
+          forward[pos][offset] + (**model).transition[0][idx_d_1],
+          forward[pos][idx_i_0+offset] + (**model).transition[idx_i_0][idx_d_1]
+          );
+      offset += (**model).total_size;
+    }
   }
 }
 
@@ -181,6 +240,12 @@ MultiProfileHMM::backward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &backward) const {
+  /* Notations:
+   * 1. B_0, E_0: the structural states that wraps all states of individual
+   *    family models;
+   * 2. B^i, E^i: the B and E states of individual model i;
+   * 3. M_j^i, I_j^i, D_j^i: the M, I, D states of individual model i.
+   */
   if (VERBOSE)
     cerr << "BACKWARD ALGORITHM" << endl;
   const size_t seq_len = observation.length();
@@ -301,4 +366,82 @@ MultiProfileHMM::backward_algorithm(const bool VERBOSE,
       offset += (**model).total_size;
     }
   }
+}
+
+void
+MultiProfileHMM::PosteriorDecoding(const bool VERBOSE,
+    const bool DEBUG,
+    const bool USE_LOG_ODDS,
+    const string &observation,
+    vector<size_t> &states) const {
+  const size_t seq_len = observation.length();
+  states.clear();
+  matrix forward, backward;
+
+  forward_algorithm(VERBOSE, USE_LOG_ODDS, observation, forward);
+  backward_algorithm(VERBOSE, USE_LOG_ODDS, observation, backward);
+
+  vector<double> xi(num_columns*2, LOG_ZERO);
+  for (size_t pos = 1; pos <= seq_len; ++pos) {
+    size_t state_offset = 2;
+    size_t xi_offset = 0;
+    for (vector<ProfileHMM*>::const_iterator model = models.begin();
+        model < models.end(); ++model) {
+      for (size_t state = (**model).index_m(1);
+          state < (**model).index_d(1); ++state) {
+        xi[state+xi_offset] = forward[pos][state+state_offset]
+          + backward[pos][state+state_offset];
+      }
+      state_offset += (**model).total_size;
+      xi_offset += (**model).model_len*2;
+    }
+    size_t idx = argmax_vec(xi);
+    states.push_back(idx);
+  }
+  if (DEBUG) {
+    cerr << "State sequence:" << endl;
+    for (vector<size_t>::const_iterator i = states.begin();
+        i < states.end(); ++i)
+      //cerr << i - states.begin() + 1 << "\t" << *i << endl;
+      cerr << i - states.begin() + 1 << "\t" << state_idx_to_str(*i) << endl;
+
+    cerr << endl << "Forward matrix:" << endl;
+    for (size_t state = 0; state < forward.front().size(); ++state)
+      cerr << "\t" << state;
+    cerr << endl;
+    for (size_t pos = 0; pos < forward.size(); ++pos) {
+      cerr << pos;
+      for (size_t state = 0; state < forward.front().size(); ++state)
+        cerr << "\t" << forward[pos][state];
+      cerr << endl;
+    }
+    cerr << endl << "Backward matrix:" << endl;
+    for (size_t state = 0; state < backward.front().size(); ++state)
+      cerr << "\t" << state;
+    cerr << endl;
+    for (size_t pos = 0; pos < backward.size(); ++pos) {
+      cerr << pos;
+      for (size_t state = 0; state < backward.front().size(); ++state)
+        cerr << "\t" << backward[pos][state];
+      cerr << endl;
+    }
+  }
+}
+
+string
+MultiProfileHMM::state_idx_to_str(const size_t idx) const {
+  size_t offset = 0;
+  vector<ProfileHMM*>::const_iterator model = models.begin();
+  while (model < models.end() && offset+(**model).model_len*2 < idx) {
+    offset += (**model).model_len*2;
+    ++model;
+  }
+  // the idx here is the xi matrix idx. The xi matrix is composed of all
+  // emitting states from individual models, with each model having 2*model_len
+  // number of states (M_1~M_L+I_0~I_L-1). Therefore the offset is added up
+  // by 2*model_len per model.
+  // To obtain the state name of individual models from this idx, 1 needs to
+  // be added because in each model there is the B state in the transition
+  // matrix before any other states.
+  return (**model).name + "." + (**model).state_idx_to_str(idx-offset+1);
 }

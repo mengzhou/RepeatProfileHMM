@@ -121,12 +121,14 @@ ProfileHMM::ProfileHMM(const matrix &t,
   model_len = (total_size - 2) / 3;
   get_viable_transitions_to();
   get_viable_transitions_from();
+  name = "NULL";
 }
 
 ProfileHMM::ProfileHMM(const string inf) {
   load_from_file(inf);
   get_viable_transitions_to();
   get_viable_transitions_from();
+  name = inf.substr(0, inf.find_last_of('.'));
 }
 
 ProfileHMM::ProfileHMM(const ProfileHMM &other) {
@@ -136,6 +138,7 @@ ProfileHMM::ProfileHMM(const ProfileHMM &other) {
   emission = other.emission;
   get_viable_transitions_to();
   get_viable_transitions_from();
+  name = other.name;
 }
 
 ProfileHMM&
@@ -143,6 +146,7 @@ ProfileHMM::operator=(const ProfileHMM &rhs) {
   ProfileHMM tmp(rhs);
   std::swap(model_len, tmp.model_len);
   std::swap(total_size, tmp.total_size);
+  std::swap(name, tmp.name);
   std::swap(transition, tmp.transition);
   std::swap(emission, tmp.emission);
   get_viable_transitions_to();
@@ -735,22 +739,27 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
         i < states.end(); ++i)
       cerr << i - states.begin() + 1 << "\t" << state_idx_to_str(*i) << endl;
 
+    cerr << std::setprecision(4);
     cerr << endl << "Forward matrix:" << endl;
     for (size_t state = 0; state < forward.front().size(); ++state)
       cerr << "\t" << state_idx_to_str(state);
+    cerr << endl;
     for (size_t pos = 0; pos < forward.size(); ++pos) {
-      cerr << pos << endl;
+      cerr << pos;
       for (size_t state = 0; state < forward.front().size(); ++state)
-        cerr << "\t" << exp(forward[pos][state]);
+        //cerr << "\t" << exp(forward[pos][state]);
+        cerr << "\t" << forward[pos][state];
       cerr << endl;
     }
     cerr << endl << "Backward matrix:" << endl;
     for (size_t state = 0; state < backward.front().size(); ++state)
       cerr << "\t" << state_idx_to_str(state);
+    cerr << endl;
     for (size_t pos = 0; pos < backward.size(); ++pos) {
-      cerr << pos << endl;
+      cerr << pos;
       for (size_t state = 0; state < backward.front().size(); ++state)
-        cerr << "\t" << exp(backward[pos][state]);
+        //cerr << "\t" << exp(backward[pos][state]);
+        cerr << "\t" << backward[pos][state];
       cerr << endl;
     }
   }

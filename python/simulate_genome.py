@@ -218,6 +218,7 @@ def main():
   opt = opt_validation(parser, opt)
 
   genome_name, genome_seq = load_fasta(opt.genome)
+  genome_name = opt.out_genome.rstrip(".fa")
   consensus_name = []
   consensus_seq = []
   families = []

@@ -49,6 +49,14 @@ index_d(const size_t model_len, const size_t idx) {
   return idx + model_len * 2;
 }
 
+void
+load_multi_model_from_file(vector<string> &list, const string par) {
+  istringstream iss(par);
+  string file;
+  while (getline(iss, file, ','))
+    list.push_back(file);
+}
+
 template <typename T>
 void
 print_matrix(const vector<vector<T> > &matrix, const size_t offset = 0,
@@ -457,15 +465,15 @@ main (int argc, const char **argv) {
   gsl_rng *rng;
   rng = gsl_rng_alloc(gsl_rng_default);
   gsl_rng_set(rng, seed);
-  ProfileHMM hmm;
 
-  if (in_par.empty()) {
-    make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
-    hmm = ProfileHMM(transition, emission);
-  }
-  else
-    //load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
-    hmm = ProfileHMM(in_par);
+  //ProfileHMM hmm;
+  //if (in_par.empty()) {
+  //  make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
+  //  hmm = ProfileHMM(transition, emission);
+  //}
+  //else
+  //  //load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
+  //  hmm = ProfileHMM(in_par);
 
   if (!out_par.empty())
     write_hmm_parameter(VERBOSE, out_par, transition, emission);
@@ -477,7 +485,7 @@ main (int argc, const char **argv) {
       cout << "Input: " << input << endl;
       cout << "Model length: " << model_len << endl;
     }
-    const string suffix(input.substr(input.find_last_of(".")+1));
+    const string suffix(input.substr(input.find_last_of('.')+1));
     string input_seq;
     if (suffix.compare("fa") == 0) {
       read_fasta_file(input, chrom_names, ref_chroms);
@@ -489,21 +497,6 @@ main (int argc, const char **argv) {
     // Decoding test
     vector<pair<char, size_t> > trace;
     vector<size_t> states;
-    //log_odds_transform(emission);
-    //const double lh = 
-    //hmm.ViterbiDecoding(VERBOSE, transition, emission, observation, trace);
-    //print_trace(trace);
-    //hmm.PosteriorDecoding(false, true, false, input_seq, states);
-    //state_to_trace(states, model_len, trace);
-    //print_trace(trace);
-    //vector<GenomicRegion> coordinates;
-    //identify_repeats(transition, emission, observation, states,
-    //  hmm, chrom_names[0], coordinates);
-    //for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-    //  i < coordinates.end(); ++i)
-    //{
-    //  cout << (*i) << endl;
-    //}
 
     // Learning test
     //if (!leftover_args.empty()) {
@@ -515,38 +508,37 @@ main (int argc, const char **argv) {
     //hmm.Print(cout, false);
     
     //Multi family test
-    ProfileHMM hmm(leftover_args.front());
-    vector<ProfileHMM> model_list(3, ProfileHMM(leftover_args.front()));
-    MultiProfileHMM mfhmm(model_list);
-    mfhmm.Print();
-  }
-  else {
-    for (size_t i = 1; i <= 3; ++i) {
-      // sampling test
-      vector<pair<char, size_t> > trace;
-      vector<size_t> states;
-      vector<int> seq;
-      string output;
-      hmm.SampleSequence(VERBOSE, rng, seq, states);
-      cout << "#Trial " << i << endl;
-      int_to_seq(seq, output);
-      cout << "  Sampled seq:\t" << output << endl;
-      state_to_trace(states, model_len, trace);
-      cout << "  Trace:\t";
-      print_trace(trace);
-      trace.clear();
-      //hmm.ViterbiDecoding(VERBOSE, seq, trace);
-      cout << "  Decoded:\t";
-      print_trace(trace);
-      cout << endl;
+    if (in_par.find(',') < string::npos) {
+      vector<string> files;
+      vector<ProfileHMM> model_list;
+      load_multi_model_from_file(files, in_par);
+      for (vector<string>::const_iterator i = files.begin();
+          i < files.end(); ++i)
+        model_list.push_back(ProfileHMM(*i));
+      MultiProfileHMM mfhmm(model_list);
+      mfhmm.Print();
+      mfhmm.PosteriorDecoding(false, true, true, input_seq, states);
     }
   }
-
-  // learning test
-  //hmm.forward_algorithm(VERBOSE, transition, emission, observation);
-  //cout << "P=" << exp(hmm.forward_prob('E', 2, 2)) << endl;
-  //hmm.backward_algorithm(VERBOSE, transition, emission, observation);
-  //hmm.BW_training(VERBOSE, transition, emission, observation);
-  //print_matrix(transition,0,true);
-  //print_matrix(emission,0,true);
+  //else {
+  //  for (size_t i = 1; i <= 3; ++i) {
+  //    // sampling test
+  //    vector<pair<char, size_t> > trace;
+  //    vector<size_t> states;
+  //    vector<int> seq;
+  //    string output;
+  //    hmm.SampleSequence(VERBOSE, rng, seq, states);
+  //    cout << "#Trial " << i << endl;
+  //    int_to_seq(seq, output);
+  //    cout << "  Sampled seq:\t" << output << endl;
+  //    state_to_trace(states, model_len, trace);
+  //    cout << "  Trace:\t";
+  //    print_trace(trace);
+  //    trace.clear();
+  //    //hmm.ViterbiDecoding(VERBOSE, seq, trace);
+  //    cout << "  Decoded:\t";
+  //    print_trace(trace);
+  //    cout << endl;
+  //  }
+  //}
 }
