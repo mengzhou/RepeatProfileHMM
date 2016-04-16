@@ -34,18 +34,21 @@ using std::string;
 MultiProfileHMM::MultiProfileHMM(vector<ProfileHMM> &v) {
   num_states = 2;
   num_columns = 0;
+  size_t offset = 0;
   for (vector<ProfileHMM>::iterator i = v.begin();
       i < v.end(); ++i) {
     models.push_back(&*i);
     num_states += (*i).total_size;
     num_columns += (*i).model_len;
+    offset += (*i).model_len*2;
+    xi_idx_upper.push_back(offset);
   }
   num_models = models.size();
   set_transition();
 }
 
 void
-MultiProfileHMM::Print(void) {
+MultiProfileHMM::Print(void) const {
   for (vector<ProfileHMM*>::const_iterator i = models.begin();
       i < models.end(); ++i)
     cout << (**i).total_size << endl;
@@ -403,7 +406,7 @@ MultiProfileHMM::PosteriorDecoding(const bool VERBOSE,
     for (vector<size_t>::const_iterator i = states.begin();
         i < states.end(); ++i)
       //cerr << i - states.begin() + 1 << "\t" << *i << endl;
-      cerr << i - states.begin() + 1 << "\t" << state_idx_to_str(*i) << endl;
+      cerr << i - states.begin() + 1 << "\t" << xi_idx_to_str(*i) << endl;
 
     cerr << endl << "Forward matrix:" << endl;
     for (size_t state = 0; state < forward.front().size(); ++state)
@@ -429,7 +432,7 @@ MultiProfileHMM::PosteriorDecoding(const bool VERBOSE,
 }
 
 string
-MultiProfileHMM::state_idx_to_str(const size_t idx) const {
+MultiProfileHMM::xi_idx_to_str(const size_t idx) const {
   size_t offset = 0;
   vector<ProfileHMM*>::const_iterator model = models.begin();
   while (model < models.end() && offset+(**model).model_len*2 < idx) {
@@ -444,4 +447,20 @@ MultiProfileHMM::state_idx_to_str(const size_t idx) const {
   // be added because in each model there is the B state in the transition
   // matrix before any other states.
   return (**model).name + "." + (**model).state_idx_to_str(idx-offset+1);
+}
+
+size_t
+MultiProfileHMM::which_model(const size_t idx) const {
+  // the idx is the index of the xi matric, not the grand forward matrix.
+  vector<size_t>::const_iterator which =
+    std::upper_bound(xi_idx_upper.begin(), xi_idx_upper.end(), idx);
+  return which - xi_idx_upper.begin();
+}
+
+void
+MultiProfileHMM::ComplementBackground(void) {
+  for (vector<ProfileHMM*>::iterator i = models.begin();
+      i < models.end(); ++i) {
+    (**i).ComplementBackground();
+  }
 }

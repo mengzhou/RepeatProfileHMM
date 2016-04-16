@@ -86,7 +86,10 @@ public:
   Print(std::ostream& out, const bool HUM_READABLE) const;
 
   size_t
-  Length(void) const;
+  Length(void) const {return model_len;}
+
+  std::string
+  Name(void) const {return name;}
 
   void
   ComplementBackground(void);

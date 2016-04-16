@@ -21,6 +21,7 @@ bin/
 test
 construct
 scan
+multiscan
 
 # no other testing stuff
 *.params

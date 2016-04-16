@@ -35,9 +35,19 @@ public:
       std::vector<size_t> &states) const;
 
   void
-  Print(void);
+  ComplementBackground(void);
 
-  //operator+;
+  void
+  Print() const;
+
+  size_t
+  which_model(const size_t xi_idx) const;
+
+  std::vector<ProfileHMM*>::const_iterator
+  begin() const { return models.cbegin(); }
+  std::vector<ProfileHMM*>::const_iterator
+  end() const { return models.cend(); }
+
 private:
   void
   forward_algorithm(const bool VERBOSE,
@@ -64,9 +74,14 @@ private:
   state_can_emit(const multihmm_state state) const;
 
   std::string
-  state_idx_to_str(const size_t idx) const;
+  xi_idx_to_str(const size_t idx) const;
 
   std::vector<ProfileHMM*> models;
+  // this vector stores *xi* indices of the last emitting state for individual
+  // models, e.g.
+  // (model[0].model_len*2, model[0].model_len*2+model[1].model_len*2, ...)
+  // used for posterior decoding
+  std::vector<size_t> xi_idx_upper;
   matrix transition;
   size_t num_models;
   size_t num_states;

@@ -154,11 +154,6 @@ ProfileHMM::operator=(const ProfileHMM &rhs) {
   return *this;
 }
 
-size_t
-ProfileHMM::Length(void) const {
-  return model_len;
-}
-
 void
 ProfileHMM::ComplementBackground(void) {
   // When doing decoding for the reverse-complement strand,

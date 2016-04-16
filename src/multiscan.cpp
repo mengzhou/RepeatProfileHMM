@@ -1,4 +1,4 @@
-/*    scan: a program for finding repeats in the genome using profile-HMM
+/*    multiscan: a program for finding repeats in the genome using profile-HMM
  *
  *    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
@@ -24,7 +24,6 @@
 #include <fstream>
 #include <sstream>
 #include <random>
-//#include <gsl/gsl_randist.h>
 #include <unordered_map>
 #include <sys/types.h>
 #include <unistd.h>
@@ -33,6 +32,7 @@
 #include "OptionParser.hpp"
 #include "GenomicRegion.hpp"
 #include "ProfileHMM.hpp"
+#include "MultiProfileHMM.hpp"
 
 using std::vector;
 using std::string;
@@ -47,78 +47,50 @@ using std::endl;
 
 typedef unordered_map<string, string> chrom_file_map;
 
-void
-load_hmm_parameter(const string &input_file,
-    matrix &transition,
-    matrix &emission,
-    size_t &model_len) {
-  /* Format of input file:
-   # some header
-   transition_value1 transition_value2 ...
-   ...
-   //
-   emission_value1 ...
-   ...
-   //
-  */
-  ifstream in(input_file.c_str());
-  // skip header with #
-  string line;
-  getline(in, line);
-  while((line.substr(0,1)) == "#"){
-    getline(in, line);
-  }
-
-  assert(transition.empty());
-  double val;
-  while (!line.empty() && line.compare("//")) {
-    transition.push_back(vector<double>());
-    istringstream iss(line);
-    while (iss >> val) {
-      (*(transition.end()-1)).push_back(val);
-    }
-    getline(in, line);
-  }
-  model_len = (transition.size() - 2) / 3;
-  assert(emission.empty());
-  getline(in, line);
-  while (!line.empty() && line.compare("//")) {
-    emission.push_back(vector<double>());
-    istringstream iss(line);
-    while (iss >> val) {
-      (*(emission.end()-1)).push_back(val);
-    }
-    getline(in, line);
-  }
-
-  const size_t total_size = model_len * 3 + 2;
-  assert(transition.size() == total_size);
-  assert((*transition.begin()).size() == total_size);
-  assert(emission.size() == total_size);
+bool
+is_bg_state(const vector<size_t> bg_states, const size_t xi_idx) {
+  vector<size_t>::const_iterator which =
+    std::find(bg_states.begin(), bg_states.end(), xi_idx);
+  return !(which == bg_states.end());
 }
 
 void
-identify_repeats(const ProfileHMM &hmm,
+identify_repeats_multifamily(const MultiProfileHMM &multihmm,
     const string &chr_seq,
     const vector<size_t> &states,
     const string chr_name,
     const bool SENSE_STRAND,
     vector<GenomicRegion> &coordinates) {
-  const size_t model_len = hmm.Length();
-  const size_t bg_state = state(0ul, 0, 1).index(model_len);
+  // get indeices of background states for individual models
+  vector<size_t> bg_states;
+  size_t offset = 0;
+  for (vector<ProfileHMM*>::const_iterator i = multihmm.begin();
+      i < multihmm.end(); ++i) {
+    const size_t bg_state_xi_idx = (**i).Length() + offset;
+    bg_states.push_back(bg_state_xi_idx);
+    offset += (**i).Length() * 2;
+  }
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
       i < states.end() - 1; ++i) {
     vector<size_t>::const_iterator j = next(i);
-    if (*i == bg_state && *j != bg_state)
+    const size_t first_model_idx = multihmm.which_model(*i);
+    const size_t second_model_idx = multihmm.which_model(*j);
+    const bool is_bg_state_i = is_bg_state(bg_states, *i);
+    const bool is_bg_state_j = is_bg_state(bg_states, *j);
+    if (is_bg_state_i && !is_bg_state_j)
       start = j - states.begin();
-    else if (*i != bg_state && *j == bg_state) {
+    else if ((!is_bg_state_i && is_bg_state_j)
+        || (first_model_idx != second_model_idx
+          && !is_bg_state_i && !is_bg_state_j)) {
       end = j - states.begin();
       const string obs = chr_seq.substr(start, end - start);
+      vector<ProfileHMM*>::const_iterator model =
+        multihmm.begin() + first_model_idx;
       double score =
-        hmm.PosteriorProb(true, obs) / obs.length();
-      string name = "X";
+        (**model).PosteriorProb(true, obs) / obs.length();
+      string name = (**model).Name();
       if (SENSE_STRAND) {
         GenomicRegion new_copy(chr_name, start,
           end, name, score, '+');
@@ -129,6 +101,8 @@ identify_repeats(const ProfileHMM &hmm,
           chr_len - start + 1, name, score, '-');
         coordinates.push_back(new_copy);
       }
+      if (!is_bg_state_i && !is_bg_state_j)
+        start = j - states.begin();
     }
   }
 }
@@ -139,10 +113,8 @@ zscore_filter(vector<GenomicRegion> &coordinates,
   // apply z-score filter to find most likely true copies
   vector<double> scores;
   for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-      i < coordinates.end(); ++i) {
-    if ((*i).get_name() == "X")
-      scores.push_back((*i).get_score());
-  }
+      i < coordinates.end(); ++i)
+    scores.push_back((*i).get_score());
   const double mean = std::accumulate(scores.begin(),
       scores.end(), 0.0) / scores.size();
   const double stdev = std::inner_product(scores.begin(),
@@ -151,10 +123,10 @@ zscore_filter(vector<GenomicRegion> &coordinates,
   for (vector<GenomicRegion>::iterator i = coordinates.begin();
       i < coordinates.end(); ++i) {
     (*i).set_score(std::abs((*i).get_score() - mean) / stdev);
-    if ((*i).get_score() > CUT_OFF)
-      (*i).set_name("COPY");
-    else
-      (*i).set_name("X");
+    //if ((*i).get_score() > CUT_OFF)
+    //  (*i).set_name("COPY");
+    //else
+    //  (*i).set_name("X");
   }
 }
 
@@ -165,7 +137,6 @@ main (int argc, const char **argv) {
     bool DEBUG = false;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
-    size_t seed = time(0) * getpid();
 
     OptionParser opt_parse(strip_path(argv[0]), "Program for finding repeats.",
         "-c <chroms> <profile-HMM params file>");
@@ -191,22 +162,25 @@ main (int argc, const char **argv) {
         << opt_parse.help_message() << endl;
       return EXIT_FAILURE;
     }
-    in_par = leftover_args.front();
+    if (leftover_args.size() < 2) {
+      cout << "Must provide more than 1 model parameter files!" << endl;
+      return EXIT_FAILURE;
+    }
 
     std::ofstream of;
     if (!out_file.empty()) of.open(out_file.c_str());
     std::ostream out(out_file.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-    // currently not used. in the furture needed for handling N in the genome
-    //gsl_rng *rng;
-    //rng = gsl_rng_alloc(gsl_rng_default);
-    //gsl_rng_set(rng, seed);
-
     if (VERBOSE)
       cerr << "[LOADING HMM]" << endl;
-    ProfileHMM hmm(in_par);
+    vector<ProfileHMM> v;
+    for (vector<string>::const_iterator file = leftover_args.begin();
+        file < leftover_args.end(); ++file) {
+      v.push_back(ProfileHMM(*file));
+    }
+    MultiProfileHMM multihmm(v);
     if (VERBOSE)
-      cerr << "\tMODEL LENGTH=" << hmm.Length() << endl;
+      cerr << "\tMODEL NUMBER=" << v.size() << endl;
 
     if (VERBOSE)
       cerr << "[LOADING GENOME]" << endl;
@@ -227,17 +201,17 @@ main (int argc, const char **argv) {
       if (VERBOSE)
         cerr << "[SCANNING 1/2]" << endl;
       vector<GenomicRegion> coordinates;
-      hmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
-      identify_repeats(hmm, chr_seq, states,
+      multihmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
+      identify_repeats_multifamily(multihmm, chr_seq, states,
         chrom->first, true, coordinates);
       if (VERBOSE)
         cerr << "[SCANNING 2/2]" << endl;
       revcomp_inplace(chr_seq);
-      hmm.ComplementBackground();
-      hmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
-      identify_repeats(hmm, chr_seq, states,
+      multihmm.ComplementBackground();
+      multihmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
+      identify_repeats_multifamily(multihmm, chr_seq, states,
         chrom->first, false, coordinates);
-      zscore_filter(coordinates, 3.0);
+      zscore_filter(coordinates, 5.0);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {

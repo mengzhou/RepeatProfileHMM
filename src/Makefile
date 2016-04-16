@@ -7,7 +7,7 @@ all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
 endif
 
-PROGS = test construct scan
+PROGS = test construct scan multiscan
 
 CXX = g++
 CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -static-libstdc++
@@ -49,9 +49,7 @@ $(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
   	OptionParser.o GenomicRegion.o)\
   	matrix_utils.o ProfileHMM.o
 
-test: $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-  	OptionParser.o GenomicRegion.o)\
-  	matrix_utils.o ProfileHMM.o MultiProfileHMM.o
+multiscan test: MultiProfileHMM.o
 
 %.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $< $(INCLUDEARGS)
