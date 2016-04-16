@@ -42,12 +42,12 @@ endif
 all: $(PROGS)
 
 install: $(PROGS)
-	@mkdir -p $(SRC_ROOT)/bin
-	@install -m 755 $(PROGS) $(SRC_ROOT)/bin
+	@mkdir -p $(PROGRAM_ROOT)/bin
+	@install -m 755 $(PROGS) $(PROGRAM_ROOT)/bin
 
 $(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-  	OptionParser.o GenomicRegion.o)\
-  	matrix_utils.o ProfileHMM.o
+	OptionParser.o GenomicRegion.o)\
+	matrix_utils.o ProfileHMM.o
 
 multiscan test: MultiProfileHMM.o
 

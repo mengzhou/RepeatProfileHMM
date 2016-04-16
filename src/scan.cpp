@@ -165,7 +165,7 @@ main (int argc, const char **argv) {
     bool DEBUG = false;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
-    size_t seed = time(0) * getpid();
+    //size_t seed = time(0) * getpid();
 
     OptionParser opt_parse(strip_path(argv[0]), "Program for finding repeats.",
         "-c <chroms> <profile-HMM params file>");
