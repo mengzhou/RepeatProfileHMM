@@ -475,7 +475,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
 
   forward[0][0] = 0;
 
-  for (size_t pos = 0; pos < seq_len + 1; ++pos) {
+  for (size_t pos = 1; pos < seq_len + 1; ++pos) {
     if (VERBOSE && pos % 10000 == 0)
       cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
     for (size_t state_idx = 0; state_idx < total_size; ++state_idx) {
@@ -534,7 +534,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
     backward.back()[state_idx] = 0.0;
 
   // loop is going backwards
-  for (signed long pos = seq_len - 1; pos >= 0; --pos) {
+  for (signed long pos = seq_len - 1; pos > 0; --pos) {
     if (VERBOSE && pos % 10000 == 0)
       cerr << "\tPROCESSED " << 100 - 100 * pos / seq_len << "%" << endl;
     for (signed long state_idx = total_size - 1;

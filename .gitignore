@@ -24,4 +24,4 @@ scan
 multiscan
 
 # no other testing stuff
-*.params
+tmp*
