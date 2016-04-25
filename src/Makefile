@@ -10,7 +10,7 @@ endif
 PROGS = test construct scan multiscan
 
 CXX = g++
-CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -static-libstdc++
+CXXFLAGS = -Wall -fmessage-length=50 -std=c++11
 OPTFLAGS = -O2
 DEBUGFLAGS = -g
 
