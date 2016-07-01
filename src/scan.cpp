@@ -97,27 +97,51 @@ load_hmm_parameter(const string &input_file,
   assert(emission.size() == total_size);
 }
 
+string
+get_state_bits(const vector<size_t> &copy_states,
+    const size_t width) {
+  // states are indexed as 0=M_0~M_L; L+1=I_0~I_L-1
+  string bits(width, '0');
+  for (vector<size_t>::const_iterator i = copy_states.begin();
+      i < copy_states.end(); ++i)
+    // only check M_1 to M_L
+    if (*i <= width && *i > 0)
+      bits[*i-1] = '1';
+  return bits;
+}
+
 void
 identify_repeats(const ProfileHMM &hmm,
     const string &chr_seq,
     const vector<size_t> &states,
     const string chr_name,
     const bool SENSE_STRAND,
-    vector<GenomicRegion> &coordinates) {
+    vector<GenomicRegion> &coordinates,
+    vector<string> &state_bits) {
   const size_t model_len = hmm.Length();
   const size_t bg_state = state(0ul, 0, 1).index(model_len);
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
-      i < states.end() - 1; ++i) {
+      i < states.end(); ++i) {
     vector<size_t>::const_iterator j = next(i);
-    if (*i == bg_state && *j != bg_state)
+    // find start of region
+    if (*i != bg_state && i == states.begin())
+      start = 0;
+    else if (*i == bg_state && *j != bg_state)
       start = j - states.begin();
-    else if (*i != bg_state && *j == bg_state) {
+    // find end of region
+    else if ((*i != bg_state && *j == bg_state)
+        || (*i != bg_state && j == states.end())) {
       end = j - states.begin();
       const string obs = chr_seq.substr(start, end - start);
+      // this is the score using log-odds
       double score =
         hmm.PosteriorProb(true, obs) / obs.length();
+      // this is the score using reverse sequenc as normalization
+      //string obs_rev(obs.rbegin(), obs.rend());
+      //double score =
+      //  hmm.PosteriorProb(true, obs) - hmm.PosteriorProb(true, obs_rev);
       string name = "X";
       if (SENSE_STRAND) {
         GenomicRegion new_copy(chr_name, start,
@@ -129,6 +153,13 @@ identify_repeats(const ProfileHMM &hmm,
           chr_len - start + 1, name, score, '-');
         coordinates.push_back(new_copy);
       }
+
+      // get bit vector for matching states
+      vector<size_t>::const_iterator first = states.begin() + start;
+      vector<size_t>::const_iterator last = states.begin() + end;
+      vector<size_t> copy_states(first, last);
+      string bits = get_state_bits(copy_states, model_len);
+      state_bits.push_back(bits);
     }
   }
 }
@@ -223,25 +254,26 @@ main (int argc, const char **argv) {
         throw SMITHLABException("could not find chrom: " + chrom->first);
 
       vector<size_t> states;
+      vector<string> state_bits;
 
       if (VERBOSE)
         cerr << "[SCANNING 1/2]" << endl;
       vector<GenomicRegion> coordinates;
       hmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
-        chrom->first, true, coordinates);
+        chrom->first, true, coordinates, state_bits);
       if (VERBOSE)
         cerr << "[SCANNING 2/2]" << endl;
       revcomp_inplace(chr_seq);
       hmm.ComplementBackground();
       hmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
       identify_repeats(hmm, chr_seq, states,
-        chrom->first, false, coordinates);
+        chrom->first, false, coordinates, state_bits);
       zscore_filter(coordinates, 3.0);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {
-        out << (*i) << endl;
+        out << (*i) << "\t" << state_bits[i-coordinates.begin()] << endl;
       }
     }
   }

@@ -478,10 +478,11 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
   for (size_t pos = 1; pos < seq_len + 1; ++pos) {
     if (VERBOSE && pos % 10000 == 0)
       cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
-    for (size_t state_idx = 0; state_idx < total_size; ++state_idx) {
-      // states with emission: M/I
-      const map<size_t, vector<size_t> >::const_iterator i = 
-        transitions_from.find(state_idx);
+    //for (size_t state_idx = 0; state_idx < total_size; ++state_idx) {
+    for (map<size_t, vector<size_t> >::const_iterator i = 
+        transitions_from.begin(); i != transitions_from.end(); ++i) {
+      //const map<size_t, vector<size_t> >::const_iterator i = 
+        //transitions_from.find(state_idx);
       if (i != transitions_from.end()) {
         vector<double> list;
         // use observation[pos-1] because in this vector the position
@@ -489,22 +490,18 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
         const int curr_baseint = base2int(observation[pos-1]);
         const size_t curr_state = i->first;
         if (state_can_emit(curr_state)) {
-          // if pos == 0, then only the non-emitting states should
-          // be calculated
-          if (pos > 0) {
-            for (vector<size_t>::const_iterator j = i->second.begin();
-                j < i->second.end(); ++j) {
-              list.push_back(forward[pos-1][*j] + transition[*j][curr_state]);
-            }
-            if (USE_LOG_ODDS)
-              forward[pos][curr_state] =
-                smithlab::log_sum_log_vec(list, list.size())
-                + emission[curr_state][curr_baseint]
-                - emission[index_i(0)][curr_baseint];
-            else
-              forward[pos][curr_state] =
-                smithlab::log_sum_log_vec(list, list.size())
-                + emission[curr_state][curr_baseint];
+          for (vector<size_t>::const_iterator j = i->second.begin();
+              j < i->second.end(); ++j) {
+            list.push_back(forward[pos-1][*j] + transition[*j][curr_state]);
+          if (USE_LOG_ODDS)
+            forward[pos][curr_state] =
+              smithlab::log_sum_log_vec(list, list.size())
+              + emission[curr_state][curr_baseint]
+              - emission[index_i(0)][curr_baseint];
+          else
+            forward[pos][curr_state] =
+              smithlab::log_sum_log_vec(list, list.size())
+              + emission[curr_state][curr_baseint];
           }
         }
         else {
@@ -720,6 +717,7 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
   forward_algorithm(VERBOSE, USE_LOG_ODDS, observation, forward);
   backward_algorithm(VERBOSE, USE_LOG_ODDS, observation, backward);
 
+  // only compute posterior for states M_0 to I_L-1
   vector<double> xi(index_d(1), LOG_ZERO);
   for (size_t pos = 1; pos <= seq_len; ++pos) {
     for (size_t state = index_m(1); state < index_d(1); ++state) {
@@ -732,7 +730,9 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
     cerr << "State sequence:" << endl;
     for (vector<size_t>::const_iterator i = states.begin();
         i < states.end(); ++i)
-      cerr << i - states.begin() + 1 << "\t" << state_idx_to_str(*i) << endl;
+      cerr << i - states.begin() + 1
+        << "\t" << *i
+        << "\t" << state_idx_to_str(*i) << endl;
 
     cerr << std::setprecision(4);
     cerr << endl << "Forward matrix:" << endl;
