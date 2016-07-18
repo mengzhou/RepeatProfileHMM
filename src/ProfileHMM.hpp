@@ -78,9 +78,24 @@ public:
       const std::string &observation,
       std::vector<size_t> &states) const;
 
+  void
+  PosteriorDecoding_c(const bool VERBOSE,
+      const bool DEBUG,
+      const bool USE_LOG_ODDS,
+      const std::string &observation,
+      std::vector<size_t> &states) const;
+
   double
   PosteriorProb(const bool USE_LOG_ODDS,
       const std::string &observation) const;
+
+  double
+  PosteriorProb_c(const bool USE_LOG_ODDS,
+      const std::string &observation) const;
+
+  void
+  FisherScoreVector(const std::string sequence,
+      std::vector<double> &score) const;
 
   void
   Print(std::ostream& out, const bool HUM_READABLE) const;
@@ -107,6 +122,9 @@ private:
   std::string
   state_idx_to_str(const size_t idx) const;
 
+  std::string
+  state_idx_to_str_c(const size_t idx) const;
+
   void
   forward_algorithm(const bool VERBOSE,
       const bool USE_LOG_ODDS,
@@ -115,6 +133,18 @@ private:
 
   void
   backward_algorithm(const bool VERBOSE,
+      const bool USE_LOG_ODDS,
+      const std::string &observation,
+      matrix &backward) const;
+
+  void
+  forward_algorithm_c(const bool VERBOSE,
+      const bool USE_LOG_ODDS,
+      const std::string &observation,
+      matrix &forward) const;
+
+  void
+  backward_algorithm_c(const bool VERBOSE,
       const bool USE_LOG_ODDS,
       const std::string &observation,
       matrix &backward) const;
@@ -143,12 +173,30 @@ private:
   void
   load_from_file(const std::string inf);
 
+  double
+  posterior_gamma(const matrix &forward,
+    const matrix &backward, const size_t state_idx,
+    const size_t position) const;
+
+  double
+  expected_emission_count(const std::string sequence,
+    const matrix &forward, const matrix &backward,
+    const size_t state_idx, const size_t nt_idx) const;
+
+  void
+  redistribute_prob(matrix &input,
+    const size_t row_idx, const std::vector<size_t> &collapse_cols);
+
+  void
+  collapse_states(void);
+
   size_t model_len;
   size_t total_size;
   std::string name;
   std::map<size_t, std::vector<size_t> > transitions_to;
   std::map<size_t, std::vector<size_t> > transitions_from;
-  matrix transition;
-  matrix emission;
+  matrix transition, transition_c;
+  matrix emission, emission_c;
+  std::vector<double> initial_prob;
 };
 #endif

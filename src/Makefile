@@ -7,7 +7,7 @@ all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
 endif
 
-PROGS = test construct scan multiscan
+PROGS = test construct scan multiscan fisher
 
 CXX = g++
 CXXFLAGS = -Wall -fmessage-length=50 -std=c++11

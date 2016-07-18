@@ -20,9 +20,11 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <iomanip>
 
 using std::vector;
 using std::pair;
+using std::endl;
 using std::accumulate;
 
 const double LOG_ZERO = -1e20;
@@ -42,11 +44,21 @@ normalize_vec_inplace(vector<double> &v, const bool logged = true) {
 
 double
 log_sum_log(const double p, const double q) {
-  if (p == 0) {return q;}
-  else if (q == 0) {return p;}
+  //if (p == 0) {return q;}
+  //else if (q == 0) {return p;}
   const double larger = (p > q) ? p : q;
   const double smaller = (p > q) ? q : p;
   return larger + log(1.0 + exp(smaller - larger));
+}
+
+double
+log_minus_log(const double p, const double q) {
+  if (p == 0) {return -q;}
+  else if (q == 0) {return p;}
+  const double larger = (p > q) ? p : q;
+  const double smaller = (p > q) ? q : p;
+  const double diff = larger + log(1.0 - exp(smaller - larger));
+  return diff;
 }
 
 double
@@ -138,4 +150,37 @@ combine_normalize(const vector<double> &v1, const vector<double> &v2,
   }
   combined = normalize_vec(combined, logged);
   return combined;
+}
+
+std::ostream&
+operator<<(std::ostream &s, const matrix &m) {
+  s << std::setprecision(4) << std::fixed;
+  for (size_t k = 0; k < m.front().size(); ++k)
+    s << "\t" << k;
+  s << "\tRowSum" << endl;
+  for (vector<vector<double> >::const_iterator i = m.begin();
+      i < m.end(); ++i) {
+    vector<double> list;
+    s << i - m.begin();
+    for (vector<double>::const_iterator j = i->begin();
+        j < i->end(); ++j) {
+      s << "\t" << exp(*j);
+      list.push_back(*j);
+    }
+    s << "\t" << exp(smithlab::log_sum_log_vec(list, list.size())) << endl;
+  }
+  return s;
+}
+
+std::ostream&
+operator<<(std::ostream &s, const vector<double> &v) {
+  //s << std::setprecision(4) << std::fixed;
+  for (size_t k = 0; k < v.size(); ++k)
+    s << k << "\t";
+  s << endl;
+  for (vector<double>::const_iterator i = v.begin();
+      i < v.end(); ++i)
+    s << *i << "\t";
+  s << endl;
+  return s;
 }

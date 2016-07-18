@@ -466,60 +466,61 @@ main (int argc, const char **argv) {
   rng = gsl_rng_alloc(gsl_rng_default);
   gsl_rng_set(rng, seed);
 
-  //ProfileHMM hmm;
-  //if (in_par.empty()) {
-  //  make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
-  //  hmm = ProfileHMM(transition, emission);
-  //}
-  //else
-  //  //load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
-  //  hmm = ProfileHMM(in_par);
-
-  if (!out_par.empty())
-    write_hmm_parameter(VERBOSE, out_par, transition, emission);
-
-  vector<string> chrom_names, ref_chroms;
-  // decoding test
-  if (!input.empty()) {
-    if (VERBOSE) {
-      cout << "Input: " << input << endl;
-      cout << "Model length: " << model_len << endl;
-    }
-    const string suffix(input.substr(input.find_last_of('.')+1));
-    string input_seq;
-    if (suffix.compare("fa") == 0) {
-      read_fasta_file(input, chrom_names, ref_chroms);
-      input_seq = ref_chroms[0];
-    }
-    else {
-      input_seq = input;
-    }
-    // Decoding test
-    vector<pair<char, size_t> > trace;
-    vector<size_t> states;
-
-    // Learning test
-    //if (!leftover_args.empty()) {
-    //  ProfileHMM h(leftover_args.front());
-    //  h.Print(cout, true);
-    //}
-    //hmm.Print(cout, true);
-    //hmm.Train(VERBOSE, 1e-4, 20, input_seq);
-    //hmm.Print(cout, false);
-    
-    //Multi family test
-    if (in_par.find(',') < string::npos) {
-      vector<string> files;
-      vector<ProfileHMM> model_list;
-      load_multi_model_from_file(files, in_par);
-      for (vector<string>::const_iterator i = files.begin();
-          i < files.end(); ++i)
-        model_list.push_back(ProfileHMM(*i));
-      MultiProfileHMM mfhmm(model_list);
-      mfhmm.Print();
-      mfhmm.PosteriorDecoding(false, true, true, input_seq, states);
-    }
+  ProfileHMM hmm;
+  if (in_par.empty()) {
+    make_hmm_parameter(VERBOSE, rng, transition, emission, model_len);
+    hmm = ProfileHMM(transition, emission);
   }
+  else
+    //load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
+    hmm = ProfileHMM(in_par);
+  hmm.Print(cout, true);
+
+  //if (!out_par.empty())
+  //  write_hmm_parameter(VERBOSE, out_par, transition, emission);
+
+  //vector<string> chrom_names, ref_chroms;
+  //// decoding test
+  //if (!input.empty()) {
+  //  if (VERBOSE) {
+  //    cout << "Input: " << input << endl;
+  //    cout << "Model length: " << model_len << endl;
+  //  }
+  //  const string suffix(input.substr(input.find_last_of('.')+1));
+  //  string input_seq;
+  //  if (suffix.compare("fa") == 0) {
+  //    read_fasta_file(input, chrom_names, ref_chroms);
+  //    input_seq = ref_chroms[0];
+  //  }
+  //  else {
+  //    input_seq = input;
+  //  }
+  //  // Decoding test
+  //  vector<pair<char, size_t> > trace;
+  //  vector<size_t> states;
+
+  //  // Learning test
+  //  //if (!leftover_args.empty()) {
+  //  //  ProfileHMM h(leftover_args.front());
+  //  //  h.Print(cout, true);
+  //  //}
+  //  //hmm.Print(cout, true);
+  //  //hmm.Train(VERBOSE, 1e-4, 20, input_seq);
+  //  //hmm.Print(cout, false);
+  //  
+  //  //Multi family test
+  //  if (in_par.find(',') < string::npos) {
+  //    vector<string> files;
+  //    vector<ProfileHMM> model_list;
+  //    load_multi_model_from_file(files, in_par);
+  //    for (vector<string>::const_iterator i = files.begin();
+  //        i < files.end(); ++i)
+  //      model_list.push_back(ProfileHMM(*i));
+  //    MultiProfileHMM mfhmm(model_list);
+  //    mfhmm.Print();
+  //    mfhmm.PosteriorDecoding(false, true, true, input_seq, states);
+  //  }
+  //}
   //else {
   //  for (size_t i = 1; i <= 3; ++i) {
   //    // sampling test

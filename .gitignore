@@ -22,6 +22,7 @@ test
 construct
 scan
 multiscan
+fisher
 
 # no other testing stuff
 tmp*

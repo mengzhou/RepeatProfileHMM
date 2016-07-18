@@ -56,4 +56,10 @@ combine_normalize(const std::vector<double> &v1, const std::vector<double> &v2,
     const bool looged,
     const std::pair<double, double> &weight = std::make_pair(0.5, 0.5));
 
+std::ostream&
+operator<<(std::ostream &s, const matrix &m);
+
+std::ostream&
+operator<<(std::ostream &s, const std::vector<double> &v);
+
 #endif

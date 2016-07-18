@@ -1,4 +1,4 @@
-/*    scan: a program for finding repeats in the genome using profile-HMM
+/*    fisher: a program for finding repeats in the genome using profile-HMM
  *
  *    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
@@ -100,12 +100,13 @@ load_hmm_parameter(const string &input_file,
 string
 get_state_bits(const vector<size_t> &copy_states,
     const size_t width) {
-  // states are indexed as 0=M_1~M_L; L=I_0~I_L-1
+  // states are indexed as 0=M_0~M_L; L+1=I_0~I_L-1
   string bits(width, '0');
   for (vector<size_t>::const_iterator i = copy_states.begin();
       i < copy_states.end(); ++i)
-    if (*i >= 0 && *i < width)
-      bits[*i] = '1';
+    // only check M_1 to M_L
+    if (*i <= width && *i > 0)
+      bits[*i-1] = '1';
   return bits;
 }
 
@@ -118,8 +119,7 @@ identify_repeats(const ProfileHMM &hmm,
     vector<GenomicRegion> &coordinates,
     vector<string> &state_bits) {
   const size_t model_len = hmm.Length();
-  //const size_t bg_state = state(0ul, 0, 1).index(model_len);
-  const size_t bg_state = model_len;
+  const size_t bg_state = state(0ul, 0, 1).index(model_len);
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
@@ -137,7 +137,7 @@ identify_repeats(const ProfileHMM &hmm,
       const string obs = chr_seq.substr(start, end - start);
       // this is the score using log-odds
       double score =
-        hmm.PosteriorProb_c(true, obs) / obs.length();
+        hmm.PosteriorProb(true, obs) / obs.length();
       // this is the score using reverse sequenc as normalization
       //string obs_rev(obs.rbegin(), obs.rend());
       //double score =
@@ -228,11 +228,6 @@ main (int argc, const char **argv) {
     if (!out_file.empty()) of.open(out_file.c_str());
     std::ostream out(out_file.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-    // currently not used. in the furture needed for handling N in the genome
-    //gsl_rng *rng;
-    //rng = gsl_rng_alloc(gsl_rng_default);
-    //gsl_rng_set(rng, seed);
-
     if (VERBOSE)
       cerr << "[LOADING HMM]" << endl;
     ProfileHMM hmm(in_par);
@@ -241,42 +236,24 @@ main (int argc, const char **argv) {
 
     if (VERBOSE)
       cerr << "[LOADING GENOME]" << endl;
-    chrom_file_map chrom_files;
-    identify_chromosomes(chrom_file, fasta_suffix, chrom_files);
+    vector<string> chrs, chr_seq;
+    read_fasta_file(chrom_file, chrs, chr_seq);
     if (VERBOSE)
-      cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
+      cerr << "\tCHROMS_FOUND=" << chrs.size() << endl;
 
-    for (chrom_file_map::const_iterator chrom = chrom_files.begin();
-        chrom != chrom_files.end(); ++chrom) {
-      string chr_seq;
-      read_fasta_file(chrom->second, chrom->first, chr_seq);
-      if (chr_seq.empty())
-        throw SMITHLABException("could not find chrom: " + chrom->first);
-
-      vector<size_t> states;
-      vector<string> state_bits;
-
-      if (VERBOSE)
-        cerr << "[SCANNING 1/2]" << endl;
-      vector<GenomicRegion> coordinates;
-      hmm.PosteriorDecoding_c(VERBOSE, DEBUG, false, chr_seq, states);
-      identify_repeats(hmm, chr_seq, states,
-        chrom->first, true, coordinates, state_bits);
-      if (VERBOSE)
-        cerr << "[SCANNING 2/2]" << endl;
-      revcomp_inplace(chr_seq);
-      hmm.ComplementBackground();
-      hmm.PosteriorDecoding_c(VERBOSE, DEBUG, false, chr_seq, states);
-      identify_repeats(hmm, chr_seq, states,
-        chrom->first, false, coordinates, state_bits);
-      zscore_filter(coordinates, 3.0);
-      for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-        i < coordinates.end(); ++i)
-      {
-        out << (*i) << "\t" << state_bits[i-coordinates.begin()] << endl;
-      }
+    for (vector<string>::const_iterator i = chrs.begin();
+        i < chrs.end(); ++i) {
+      const size_t index = i - chrs.begin();
+      vector<double> score;
+      hmm.FisherScoreVector(chr_seq[index], score);
+      cout << *i;
+      for (vector<double>::const_iterator j = score.begin();
+          j < score.end(); ++j)
+        cout << "\t" << *j;
+      cout << endl;
     }
   }
+
   catch (const SMITHLABException &e) {
     cerr << e.what() << endl;
     return EXIT_FAILURE;

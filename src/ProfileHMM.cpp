@@ -122,6 +122,7 @@ ProfileHMM::ProfileHMM(const matrix &t,
   get_viable_transitions_to();
   get_viable_transitions_from();
   name = "NULL";
+  collapse_states();
 }
 
 ProfileHMM::ProfileHMM(const string inf) {
@@ -129,6 +130,7 @@ ProfileHMM::ProfileHMM(const string inf) {
   get_viable_transitions_to();
   get_viable_transitions_from();
   name = inf.substr(0, inf.find_last_of('.'));
+  collapse_states();
 }
 
 ProfileHMM::ProfileHMM(const ProfileHMM &other) {
@@ -136,6 +138,8 @@ ProfileHMM::ProfileHMM(const ProfileHMM &other) {
   total_size = other.total_size;
   transition = other.transition;
   emission = other.emission;
+  transition_c = other.transition_c;
+  emission_c = other.emission_c;
   get_viable_transitions_to();
   get_viable_transitions_from();
   name = other.name;
@@ -149,6 +153,8 @@ ProfileHMM::operator=(const ProfileHMM &rhs) {
   std::swap(name, tmp.name);
   std::swap(transition, tmp.transition);
   std::swap(emission, tmp.emission);
+  std::swap(transition_c, tmp.transition_c);
+  std::swap(emission_c, tmp.emission_c);
   get_viable_transitions_to();
   get_viable_transitions_from();
   return *this;
@@ -195,6 +201,16 @@ ProfileHMM::state_idx_to_str(const size_t idx) const {
     return "D" + std::to_string(idx - model_len * 2);
   else
     return "E";
+}
+
+string
+ProfileHMM::state_idx_to_str_c(const size_t idx) const {
+  if (idx < model_len)
+    return "M" + std::to_string(idx+1);
+  else if (idx < model_len * 2)
+    return "I" + std::to_string(idx - model_len);
+  else
+    return "N";
 }
 
 double
@@ -467,7 +483,6 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &forward) const {
-  // the forward matrix f[state_idx][pos] is an L x N matrix
   if (VERBOSE)
     cerr << "FORWARD ALGORITHM" << endl;
   const size_t seq_len = observation.length();
@@ -478,7 +493,6 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
   for (size_t pos = 1; pos < seq_len + 1; ++pos) {
     if (VERBOSE && pos % 10000 == 0)
       cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
-    //for (size_t state_idx = 0; state_idx < total_size; ++state_idx) {
     for (map<size_t, vector<size_t> >::const_iterator i = 
         transitions_from.begin(); i != transitions_from.end(); ++i) {
       //const map<size_t, vector<size_t> >::const_iterator i = 
@@ -532,7 +546,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
 
   // loop is going backwards
   for (signed long pos = seq_len - 1; pos > 0; --pos) {
-    if (VERBOSE && pos % 10000 == 0)
+    if (VERBOSE && (seq_len - pos) % 10000 == 0)
       cerr << "\tPROCESSED " << 100 - 100 * pos / seq_len << "%" << endl;
     for (signed long state_idx = total_size - 1;
         state_idx >= 0; --state_idx) {
@@ -568,6 +582,84 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
         backward[pos][curr_state] =
           smithlab::log_sum_log_vec(list, list.size());
       }
+    }
+  }
+}
+
+void
+ProfileHMM::forward_algorithm_c(const bool VERBOSE,
+    const bool USE_LOG_ODDS,
+    const string &observation,
+    matrix &forward) const {
+  const size_t seq_len = observation.length();
+  const size_t state_num = model_len*2;
+  if (VERBOSE)
+    cerr << "FORWARD ALGORITHM " << seq_len << "x" << state_num << endl;
+  forward.resize(seq_len, vector<double>(state_num, LOG_ZERO));
+  for (size_t state = 0; state < state_num; ++state)
+    forward.front()[state] = initial_prob[state]
+      + emission_c[state][base2int(observation.front())];
+
+  for (size_t pos = 1; pos < seq_len; ++pos) {
+    if (VERBOSE && pos % 10000 == 0)
+      cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
+    const int curr_baseint = base2int(observation[pos]);
+    for (size_t state = 0; state < state_num; ++state) {
+      vector<double> list;
+      for (size_t prev_state = 0; prev_state < state_num; ++prev_state) {
+        if (transition_c[prev_state][state] > LOG_ZERO
+            && forward[pos-1][prev_state] > LOG_ZERO) {
+          list.push_back(forward[pos-1][prev_state] +
+            transition_c[prev_state][state]);
+        }
+      }
+      if (USE_LOG_ODDS) {
+        forward[pos][state] = emission_c[state][curr_baseint]
+          - emission_c[model_len][curr_baseint] // supposed to be I_0
+          + smithlab::log_sum_log_vec(list, list.size());
+      }
+      else {
+        forward[pos][state] = emission_c[state][curr_baseint]
+          + smithlab::log_sum_log_vec(list, list.size());
+      }
+    }
+  }
+}
+
+void
+ProfileHMM::backward_algorithm_c(const bool VERBOSE,
+    const bool USE_LOG_ODDS,
+    const string &observation,
+    matrix &backward) const {
+  if (VERBOSE)
+    cerr << "BACKWARD ALGORITHM" << endl;
+  const size_t seq_len = observation.length();
+  const size_t state_num = model_len*2;
+  backward.resize(seq_len, vector<double>(state_num, LOG_ZERO));
+  for (size_t state = 0; state < state_num; ++state)
+    backward.back()[state] = 0.0;
+
+  for (signed long pos = seq_len - 2; pos >= 0; --pos) {
+    if (VERBOSE && (seq_len - pos) % 10000 == 0)
+      cerr << "\tPROCESSED " << 100 - 100 * pos / seq_len << "%" << endl;
+    const int next_baseint = base2int(observation[pos+1]);
+    for (size_t state = 0; state < state_num; ++state) {
+      vector<double> list;
+      for (size_t next_state = 0; next_state < state_num; ++next_state) {
+        const double transition_prob = transition_c[state][next_state];
+        if (transition_prob > LOG_ZERO) {
+          if (USE_LOG_ODDS)
+            list.push_back(backward[pos+1][next_state]
+              + emission_c[next_state][next_baseint]
+              - emission_c[model_len][next_baseint] // supposed to be I_0
+              + transition_prob);
+          else
+            list.push_back(backward[pos+1][next_state]
+              + emission_c[next_state][next_baseint]
+              + transition_prob);
+        }
+      }
+      backward[pos][state] = smithlab::log_sum_log_vec(list, list.size());
     }
   }
 }
@@ -760,12 +852,88 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
   }
 }
 
+void
+ProfileHMM::PosteriorDecoding_c(const bool VERBOSE,
+    const bool DEBUG,
+    const bool USE_LOG_ODDS,
+    const string &observation,
+    vector<size_t> &states) const {
+  const size_t seq_len = observation.length();
+  states.clear();
+  matrix forward, backward;
+
+  forward_algorithm_c(VERBOSE, USE_LOG_ODDS, observation, forward);
+  backward_algorithm_c(VERBOSE, USE_LOG_ODDS, observation, backward);
+
+  const size_t state_num = model_len*2;
+  vector<double> xi(state_num, LOG_ZERO);
+  if (DEBUG) {
+    cerr << std::setprecision(4);
+    cerr << "Xi matrix:" << endl;
+    for (size_t state = 0; state < state_num; ++state)
+      cerr << "\t" << state;
+    cerr << endl;
+  }
+  for (size_t pos = 0; pos < seq_len; ++pos) {
+    if (DEBUG) cerr << pos;
+    for (size_t state = 0; state < state_num; ++state) {
+      xi[state] = forward[pos][state] + backward[pos][state];
+      if (DEBUG) cerr << "\t" << xi[state];
+    }
+    if (DEBUG) cerr << endl;
+    size_t idx = argmax_vec(xi);
+    // idx+1 is because in collased matrix, state[0] is M_1, while in the
+    // full matrix state[0] is M_0 which is not included in decoding.
+    states.push_back(idx);
+  }
+  if (DEBUG) {
+    cerr << endl << "State sequence:" << endl;
+    for (vector<size_t>::const_iterator i = states.begin();
+        i < states.end(); ++i)
+      cerr << i - states.begin() + 1
+        << "\t" << *i
+        << "\t" << state_idx_to_str_c(*i) << endl;
+
+    cerr << endl << "Forward matrix:" << endl;
+    for (size_t state = 0; state < forward.front().size(); ++state)
+      cerr << "\t" << state_idx_to_str_c(state);
+    cerr << endl;
+    for (size_t pos = 0; pos < forward.size(); ++pos) {
+      cerr << pos;
+      for (size_t state = 0; state < forward.front().size(); ++state)
+        //cerr << "\t" << exp(forward[pos][state]);
+        cerr << "\t" << forward[pos][state];
+      cerr << endl;
+    }
+    cerr << endl << "Backward matrix:" << endl;
+    for (size_t state = 0; state < backward.front().size(); ++state)
+      cerr << "\t" << state_idx_to_str_c(state);
+    cerr << endl;
+    for (size_t pos = 0; pos < backward.size(); ++pos) {
+      cerr << pos;
+      for (size_t state = 0; state < backward.front().size(); ++state)
+        //cerr << "\t" << exp(backward[pos][state]);
+        cerr << "\t" << backward[pos][state];
+      cerr << endl;
+    }
+  }
+}
+
 double
 ProfileHMM::PosteriorProb(const bool USE_LOG_ODDS,
     const string &observation) const {
   matrix forward;
 
   forward_algorithm(false, USE_LOG_ODDS, observation, forward);
+  return posterior_prob(forward);
+}
+
+double
+ProfileHMM::PosteriorProb_c(const bool USE_LOG_ODDS,
+    const string &observation) const {
+  matrix forward;
+
+  forward_algorithm_c(true, USE_LOG_ODDS, observation, forward);
   return posterior_prob(forward);
 }
 
@@ -887,8 +1055,14 @@ ProfileHMM::Print(ostream& out, const bool HUM_READABLE) const {
   out << "#Model length: " << model_len << endl;
   out << "#Transition" << endl;
   print_transition(out, HUM_READABLE);
+  out << "#########" << endl;
+  out << transition_c;
+  out << "#########" << endl;
   out << endl << "#Emission" << endl;
   print_emission(out, HUM_READABLE);
+  out << "#########" << endl;
+  out << emission_c;
+  out << "#########" << endl;
   out << "//" << endl;
 }
 
@@ -1218,4 +1392,121 @@ ProfileHMM::load_from_file(const string filename) {
 
     getline(in, line);
   }
+}
+
+double
+ProfileHMM::posterior_gamma(const matrix &forward,
+    const matrix &backward, const size_t state_idx,
+    const size_t position) const {
+  // sequence position is 0-based
+  const double p = posterior_prob(forward);
+  return forward[position][state_idx] + backward[position][state_idx]
+    - p;
+}
+
+double
+ProfileHMM::expected_emission_count(const string sequence,
+    const matrix &forward, const matrix &backward,
+    const size_t state_idx, const size_t nt_idx) const {
+  vector<double> state_count, nt_count;
+  // sequence position is 0-based
+  // state_idx is 0-based, so state_idx = 0 corresponds to M_1,
+  // which in the forward matrix is idx = 1, because there is M_0
+  for (size_t i = 0; i < sequence.length() - 1; ++i) {
+    const double exp_count = posterior_gamma(forward, backward, state_idx+1, i);
+    state_count.push_back(exp_count);
+    if (base2int(sequence[i]) == nt_idx)
+      nt_count.push_back(exp_count);
+  }
+  const double numerator =
+    smithlab::log_sum_log_vec(nt_count, nt_count.size());
+  const double denominator =
+    smithlab::log_sum_log_vec(state_count, state_count.size());
+  return numerator - denominator;
+}
+
+void
+ProfileHMM::FisherScoreVector(const string sequence,
+    vector<double> &score) const {
+  matrix forward, backward;
+  forward_algorithm(false, false, sequence, forward);
+  backward_algorithm(false, false, sequence, backward);
+  score.resize(model_len*4, 0.0);
+
+  for (size_t i = 0; i < score.size(); ++i) {
+    const size_t state_index = i/4;
+    const size_t nt_index = i%4;
+    vector<double> expected_count(4, 0.0);
+    expected_count[nt_index] = expected_emission_count(sequence, forward,
+        backward, state_index, nt_index);
+    if (nt_index == 3) {
+      const double state_sum =
+        smithlab::log_sum_log_vec(expected_count, expected_count.size());
+      for (size_t j = 0; j < 4; ++j) {
+        score[state_index*4+j] =
+          exp(expected_count[j] - emission[state_index][j]) - state_sum;
+      }
+    }
+  }
+}
+
+void
+ProfileHMM::redistribute_prob(matrix &input,
+    const size_t row_idx, const vector<size_t> &collapse_cols) {
+  // Collapsing a row:
+  // Given a matrix, a row to be collapsed and a list of columns to be
+  // collapsed, going over the list, first set the value of the cell to 0,
+  // then redistribute its outgoing transition probabilities to the 
+  // corresponding cells in the same row.
+  // E.g. to collapse col 8 of row 5, set row_5 = row_5 + row_8 * cell_5,8;
+  // then set cell_5,8 = 0
+  // Note: assume there is no self loop for any state to be collapsed.
+  for (vector<size_t>::const_iterator col_itr = collapse_cols.begin();
+      col_itr < collapse_cols.end(); ++col_itr) {
+    if (input[row_idx][*col_itr] > LOG_ZERO) {
+      for (size_t i = 0; i < input[row_idx].size(); ++i) {
+        if (input[*col_itr][i] > LOG_ZERO)
+          input[row_idx][i] = log_sum_log(input[row_idx][i],
+              input[row_idx][*col_itr] + input[*col_itr][i]);
+      }
+      input[row_idx][*col_itr] = LOG_ZERO;
+    }
+  }
+  for (vector<size_t>::const_iterator col_itr = collapse_cols.begin();
+      col_itr < collapse_cols.end(); ++col_itr) {
+    if (input[row_idx][*col_itr] > LOG_ZERO)
+      redistribute_prob(input, row_idx, collapse_cols);
+  }
+  return;
+}
+
+void
+ProfileHMM::collapse_states(void) {
+  //transition_c.resize(model_len*2+2, vector<double>(model_len*2+2, LOG_ZERO));
+  transition_c = transition;
+  const size_t first_non_emis = index_d(1);
+  vector<size_t> collapse_cols(1, 0);
+  for (size_t i = first_non_emis; i < transition[0].size(); ++i)
+    collapse_cols.push_back(i);
+
+  for (size_t row = 0; row < first_non_emis; ++row) {
+    redistribute_prob(transition_c, row, collapse_cols);
+    // delete non-emitting columns (M_0, D_1 - D_L, E)
+    transition_c[row].erase(transition_c[row].begin()+first_non_emis,
+        transition_c[row].end());
+    transition_c[row].erase(transition_c[row].begin());
+  }
+  // delete non-emitting rows (M_0, D_1 -> D_L), and use row M_0 as initial
+  transition_c.erase(transition_c.begin()+first_non_emis,
+      transition_c.end());
+  initial_prob = transition_c.front();
+  transition_c.erase(transition_c.begin());
+  // now the new transition matrix should be 2*L x 2*L
+  assert(transition_c.size() == model_len*2);
+  assert(transition_c[0].size() == model_len*2);
+
+  for (size_t i = 1; i < first_non_emis; ++i) {
+    emission_c.push_back(emission[i]);
+  }
+  assert(emission_c.size() == model_len * 2);
 }
