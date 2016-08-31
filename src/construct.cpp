@@ -59,7 +59,7 @@ load_alignment(bool VERBOSE, const string infile,
 
     while (iss >> buffer)
       tokens.push_back(buffer);
-    if (tokens.size() == 2) {
+    if (tokens.size() == 2 && buffer.find('*') == std::string::npos) {
       name = tokens.front();
       seq = tokens.back();
       const unordered_map<string, string>::const_iterator repeat(msa.find(name));

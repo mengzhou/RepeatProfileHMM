@@ -47,56 +47,6 @@ using std::endl;
 
 typedef unordered_map<string, string> chrom_file_map;
 
-void
-load_hmm_parameter(const string &input_file,
-    matrix &transition,
-    matrix &emission,
-    size_t &model_len) {
-  /* Format of input file:
-   # some header
-   transition_value1 transition_value2 ...
-   ...
-   //
-   emission_value1 ...
-   ...
-   //
-  */
-  ifstream in(input_file.c_str());
-  // skip header with #
-  string line;
-  getline(in, line);
-  while((line.substr(0,1)) == "#"){
-    getline(in, line);
-  }
-
-  assert(transition.empty());
-  double val;
-  while (!line.empty() && line.compare("//")) {
-    transition.push_back(vector<double>());
-    istringstream iss(line);
-    while (iss >> val) {
-      (*(transition.end()-1)).push_back(val);
-    }
-    getline(in, line);
-  }
-  model_len = (transition.size() - 2) / 3;
-  assert(emission.empty());
-  getline(in, line);
-  while (!line.empty() && line.compare("//")) {
-    emission.push_back(vector<double>());
-    istringstream iss(line);
-    while (iss >> val) {
-      (*(emission.end()-1)).push_back(val);
-    }
-    getline(in, line);
-  }
-
-  const size_t total_size = model_len * 3 + 2;
-  assert(transition.size() == total_size);
-  assert((*transition.begin()).size() == total_size);
-  assert(emission.size() == total_size);
-}
-
 string
 get_state_bits(const vector<size_t> &copy_states,
     const size_t width) {
@@ -119,7 +69,8 @@ identify_repeats(const ProfileHMM &hmm,
     vector<GenomicRegion> &coordinates,
     vector<string> &state_bits) {
   const size_t model_len = hmm.Length();
-  const size_t bg_state = state(0ul, 0, 1).index(model_len);
+  //const size_t bg_state = state(0ul, 0, 1).index(model_len);
+  const size_t bg_state = model_len;
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
@@ -137,7 +88,7 @@ identify_repeats(const ProfileHMM &hmm,
       const string obs = chr_seq.substr(start, end - start);
       // this is the score using log-odds
       double score =
-        hmm.PosteriorProb(true, obs) / obs.length();
+        hmm.PosteriorProb_c(true, obs) / obs.length();
       // this is the score using reverse sequenc as normalization
       //string obs_rev(obs.rbegin(), obs.rend());
       //double score =
@@ -164,31 +115,6 @@ identify_repeats(const ProfileHMM &hmm,
   }
 }
 
-void
-zscore_filter(vector<GenomicRegion> &coordinates,
-    const double CUT_OFF) {
-  // apply z-score filter to find most likely true copies
-  vector<double> scores;
-  for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-      i < coordinates.end(); ++i) {
-    if ((*i).get_name() == "X")
-      scores.push_back((*i).get_score());
-  }
-  const double mean = std::accumulate(scores.begin(),
-      scores.end(), 0.0) / scores.size();
-  const double stdev = std::inner_product(scores.begin(),
-      scores.end(), scores.begin(), 0.0) / scores.size()
-    - mean * mean;
-  for (vector<GenomicRegion>::iterator i = coordinates.begin();
-      i < coordinates.end(); ++i) {
-    (*i).set_score(std::abs((*i).get_score() - mean) / stdev);
-    if ((*i).get_score() > CUT_OFF)
-      (*i).set_name("COPY");
-    else
-      (*i).set_name("X");
-  }
-}
-
 int
 main (int argc, const char **argv) {
   try {
@@ -199,10 +125,10 @@ main (int argc, const char **argv) {
     //size_t seed = time(0) * getpid();
 
     OptionParser opt_parse(strip_path(argv[0]), "Program for finding repeats.",
-        "-c <chroms> <profile-HMM params file>");
+        "-c <fasta> <profile-HMM params file>");
 
     opt_parse.add_opt("chrom", 'c',
-      "File or directory of chroms (FASTA format; .fa suffix)",
+      "File or directory of sequences (FASTA format; .fa suffix)",
       true, chrom_file);
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, out_file);
@@ -235,22 +161,25 @@ main (int argc, const char **argv) {
       cerr << "\tMODEL LENGTH=" << hmm.Length() << endl;
 
     if (VERBOSE)
-      cerr << "[LOADING GENOME]" << endl;
-    vector<string> chrs, chr_seq;
-    read_fasta_file(chrom_file, chrs, chr_seq);
+      cerr << "[LOADING SEQUENCES]" << endl;
+    vector<string> copies, copy_seq;
+    read_fasta_file(chrom_file, copies, copy_seq);
     if (VERBOSE)
-      cerr << "\tCHROMS_FOUND=" << chrs.size() << endl;
+      cerr << "\tSEQUENCES FOUND=" << copies.size() << endl;
 
-    for (vector<string>::const_iterator i = chrs.begin();
-        i < chrs.end(); ++i) {
-      const size_t index = i - chrs.begin();
+    for (vector<string>::const_iterator i = copies.begin();
+        i < copies.end(); ++i) {
+      if (VERBOSE && (i-copies.begin()+1)%10==0)
+        cerr << "\tProcessed "
+          << 100*(i-copies.begin()+1)/copies.size() << "%" << endl;
+      const size_t index = i - copies.begin();
       vector<double> score;
-      hmm.FisherScoreVector(chr_seq[index], score);
-      cout << *i;
+      hmm.FisherScoreVector(copy_seq[index], score);
+      out << *i;
       for (vector<double>::const_iterator j = score.begin();
           j < score.end(); ++j)
-        cout << "\t" << *j;
-      cout << endl;
+        out << "\t" << *j;
+      out << endl;
     }
   }
 

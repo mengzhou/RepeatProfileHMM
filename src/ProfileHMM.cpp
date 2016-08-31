@@ -933,7 +933,7 @@ ProfileHMM::PosteriorProb_c(const bool USE_LOG_ODDS,
     const string &observation) const {
   matrix forward;
 
-  forward_algorithm_c(true, USE_LOG_ODDS, observation, forward);
+  forward_algorithm_c(false, USE_LOG_ODDS, observation, forward);
   return posterior_prob(forward);
 }
 
@@ -1055,14 +1055,8 @@ ProfileHMM::Print(ostream& out, const bool HUM_READABLE) const {
   out << "#Model length: " << model_len << endl;
   out << "#Transition" << endl;
   print_transition(out, HUM_READABLE);
-  out << "#########" << endl;
-  out << transition_c;
-  out << "#########" << endl;
   out << endl << "#Emission" << endl;
   print_emission(out, HUM_READABLE);
-  out << "#########" << endl;
-  out << emission_c;
-  out << "#########" << endl;
   out << "//" << endl;
 }
 
@@ -1398,7 +1392,8 @@ double
 ProfileHMM::posterior_gamma(const matrix &forward,
     const matrix &backward, const size_t state_idx,
     const size_t position) const {
-  // sequence position is 0-based
+  // the probability that staying at state state_idx
+  // in the given sequence position
   const double p = posterior_prob(forward);
   return forward[position][state_idx] + backward[position][state_idx]
     - p;
@@ -1410,18 +1405,18 @@ ProfileHMM::expected_emission_count(const string sequence,
     const size_t state_idx, const size_t nt_idx) const {
   vector<double> state_count, nt_count;
   // sequence position is 0-based
-  // state_idx is 0-based, so state_idx = 0 corresponds to M_1,
-  // which in the forward matrix is idx = 1, because there is M_0
+  // state_idx is 0-based, so state_idx = 0 corresponds to M_1 in the
+  // collapsed matrix
   for (size_t i = 0; i < sequence.length() - 1; ++i) {
-    const double exp_count = posterior_gamma(forward, backward, state_idx+1, i);
+    const double exp_count = posterior_gamma(forward, backward, state_idx, i);
     state_count.push_back(exp_count);
     if (base2int(sequence[i]) == nt_idx)
       nt_count.push_back(exp_count);
   }
-  const double numerator =
-    smithlab::log_sum_log_vec(nt_count, nt_count.size());
-  const double denominator =
-    smithlab::log_sum_log_vec(state_count, state_count.size());
+  const double numerator = nt_count.size() > 0 ?
+    smithlab::log_sum_log_vec(nt_count, nt_count.size()) : 0.0;
+  const double denominator = state_count.size() > 0 ?
+    smithlab::log_sum_log_vec(state_count, state_count.size()) : 0.0;
   return numerator - denominator;
 }
 
@@ -1429,10 +1424,11 @@ void
 ProfileHMM::FisherScoreVector(const string sequence,
     vector<double> &score) const {
   matrix forward, backward;
-  forward_algorithm(false, false, sequence, forward);
-  backward_algorithm(false, false, sequence, backward);
+  forward_algorithm_c(false, false, sequence, forward);
+  backward_algorithm_c(false, false, sequence, backward);
   score.resize(model_len*4, 0.0);
 
+  // scores for emission parameters
   for (size_t i = 0; i < score.size(); ++i) {
     const size_t state_index = i/4;
     const size_t nt_index = i%4;
@@ -1444,10 +1440,12 @@ ProfileHMM::FisherScoreVector(const string sequence,
         smithlab::log_sum_log_vec(expected_count, expected_count.size());
       for (size_t j = 0; j < 4; ++j) {
         score[state_index*4+j] =
-          exp(expected_count[j] - emission[state_index][j]) - state_sum;
+          exp(expected_count[j] - emission_c[state_index][j]) - state_sum;
       }
     }
   }
+
+  // scores for transition parameters
 }
 
 void
@@ -1482,7 +1480,6 @@ ProfileHMM::redistribute_prob(matrix &input,
 
 void
 ProfileHMM::collapse_states(void) {
-  //transition_c.resize(model_len*2+2, vector<double>(model_len*2+2, LOG_ZERO));
   transition_c = transition;
   const size_t first_non_emis = index_d(1);
   vector<size_t> collapse_cols(1, 0);
