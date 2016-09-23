@@ -259,6 +259,27 @@ find_marked_cols_heu(vector<bool> &marked,
   }
 }
 
+string
+get_consensus(const vector<bool> &marked,
+    const unordered_map<string, string> &msa) {
+  const size_t seq_len = marked.size();
+  string consensus = "";
+  for (size_t col = 0; col < seq_len; ++col) {
+    if (marked[col]) {
+      vector<size_t> nt_count(4, 0);
+      for (unordered_map<string, string>::const_iterator i = msa.begin();
+          i != msa.end(); ++i) {
+        const int nt = base2int(i->second[col]);
+        if (nt < 4) ++nt_count[nt];
+      }
+      vector<size_t>::iterator majority_nt = std::max_element(nt_count.begin(),
+          nt_count.end());
+      consensus += int2base(majority_nt - nt_count.begin());
+    }
+  }
+  return consensus;
+}
+
 void
 write_hmm_parameter(const bool VERBOSE,
     ostream &out,
@@ -324,6 +345,10 @@ main (int argc, const char **argv) {
       cerr << "[LOADING ALIGNMENT]" << endl;
     unordered_map<string, string> msa;
     load_alignment(VERBOSE, inf, msa);
+    if (msa.size() == 0) {
+      cerr << "NO SEQUENCE WAS LOADED. PLEASE CHECK INPUT." << endl;
+      return EXIT_FAILURE;
+    }
 
     // 2. compute recursion to find marked (match) columns
     if (VERBOSE)
@@ -580,6 +605,8 @@ main (int argc, const char **argv) {
           cerr << " ";
       }
       cerr << endl;
+      cerr << "Consensus: " << endl
+        << get_consensus(marked_cols, msa) << endl;
     }
   }
   catch (const SMITHLABException &e) {

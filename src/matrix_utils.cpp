@@ -31,6 +31,9 @@ const double LOG_ZERO = -1e20;
 
 void
 normalize_vec_inplace(vector<double> &v, const bool logged = true) {
+  // potentially needed to add another parameter for the scaling factor,
+  // since not in all cases is the vector required to be normalized to
+  // the sum of 1.
   const double sum = logged ?
     smithlab::log_sum_log_vec(v, v.size())
     : std::accumulate(v.begin(), v.end(), 0.0);

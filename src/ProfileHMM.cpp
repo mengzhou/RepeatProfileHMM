@@ -1389,17 +1389,6 @@ ProfileHMM::load_from_file(const string filename) {
 }
 
 double
-ProfileHMM::posterior_gamma(const matrix &forward,
-    const matrix &backward, const size_t state_idx,
-    const size_t position) const {
-  // the probability that staying at state state_idx
-  // in the given sequence position
-  const double p = posterior_prob(forward);
-  return forward[position][state_idx] + backward[position][state_idx]
-    - p;
-}
-
-double
 ProfileHMM::expected_emission_count(const string sequence,
     const matrix &forward, const matrix &backward,
     const size_t state_idx, const size_t nt_idx) const {
@@ -1407,16 +1396,19 @@ ProfileHMM::expected_emission_count(const string sequence,
   // sequence position is 0-based
   // state_idx is 0-based, so state_idx = 0 corresponds to M_1 in the
   // collapsed matrix
+  const double post_p = posterior_prob(forward);
   for (size_t i = 0; i < sequence.length() - 1; ++i) {
-    const double exp_count = posterior_gamma(forward, backward, state_idx, i);
+    // posterior count of staying at state_idx
+    const double exp_count = forward[i][state_idx] + backward[i][state_idx]
+      - post_p;
     state_count.push_back(exp_count);
     if (base2int(sequence[i]) == nt_idx)
       nt_count.push_back(exp_count);
   }
   const double numerator = nt_count.size() > 0 ?
-    smithlab::log_sum_log_vec(nt_count, nt_count.size()) : 0.0;
-  const double denominator = state_count.size() > 0 ?
-    smithlab::log_sum_log_vec(state_count, state_count.size()) : 0.0;
+    smithlab::log_sum_log_vec(nt_count, nt_count.size()) : -1e3;
+  const double denominator = 
+    smithlab::log_sum_log_vec(state_count, state_count.size());
   return numerator - denominator;
 }
 
@@ -1429,10 +1421,10 @@ ProfileHMM::FisherScoreVector(const string sequence,
   score.resize(model_len*4, 0.0);
 
   // scores for emission parameters
+  vector<double> expected_count(4, 0.0);
   for (size_t i = 0; i < score.size(); ++i) {
     const size_t state_index = i/4;
     const size_t nt_index = i%4;
-    vector<double> expected_count(4, 0.0);
     expected_count[nt_index] = expected_emission_count(sequence, forward,
         backward, state_index, nt_index);
     if (nt_index == 3) {
@@ -1440,7 +1432,7 @@ ProfileHMM::FisherScoreVector(const string sequence,
         smithlab::log_sum_log_vec(expected_count, expected_count.size());
       for (size_t j = 0; j < 4; ++j) {
         score[state_index*4+j] =
-          exp(expected_count[j] - emission_c[state_index][j]) - state_sum;
+          exp(expected_count[j] - emission_c[state_index][j]) - exp(state_sum);
       }
     }
   }

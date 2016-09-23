@@ -248,27 +248,30 @@ main (int argc, const char **argv) {
 
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
-      string chr_seq;
-      read_fasta_file(chrom->second, chrom->first, chr_seq);
-      if (chr_seq.empty())
-        throw SMITHLABException("could not find chrom: " + chrom->first);
+      vector<string> chr_name, chr_seq;
+      read_fasta_file(chrom->second, chr_name, chr_seq);
+      if (chr_name.size() < 1)
+        throw SMITHLABException("could not find any sequence in: "
+            + chrom->second);
 
       vector<size_t> states;
       vector<string> state_bits;
 
       if (VERBOSE)
-        cerr << "[SCANNING 1/2]" << endl;
+        cerr << "[SCANNING " << chrom->second << "]" << endl;
       vector<GenomicRegion> coordinates;
-      hmm.PosteriorDecoding_c(VERBOSE, DEBUG, false, chr_seq, states);
-      identify_repeats(hmm, chr_seq, states,
-        chrom->first, true, coordinates, state_bits);
-      if (VERBOSE)
-        cerr << "[SCANNING 2/2]" << endl;
-      revcomp_inplace(chr_seq);
-      hmm.ComplementBackground();
-      hmm.PosteriorDecoding_c(VERBOSE, DEBUG, false, chr_seq, states);
-      identify_repeats(hmm, chr_seq, states,
-        chrom->first, false, coordinates, state_bits);
+      for (size_t i = 0; i < chr_seq.size(); ++i) {
+        // the forward strand
+        hmm.PosteriorDecoding_c(false, DEBUG, false, chr_seq[i], states);
+        identify_repeats(hmm, chr_seq[i], states,
+          chr_name[i], true, coordinates, state_bits);
+        // the reverse strand
+        revcomp_inplace(chr_seq[i]);
+        hmm.ComplementBackground();
+        hmm.PosteriorDecoding_c(false, DEBUG, false, chr_seq[i], states);
+        identify_repeats(hmm, chr_seq[i], states,
+          chr_name[i], false, coordinates, state_bits);
+      }
       zscore_filter(coordinates, 3.0);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)

@@ -174,11 +174,6 @@ private:
   load_from_file(const std::string inf);
 
   double
-  posterior_gamma(const matrix &forward,
-    const matrix &backward, const size_t state_idx,
-    const size_t position) const;
-
-  double
   expected_emission_count(const std::string sequence,
     const matrix &forward, const matrix &backward,
     const size_t state_idx, const size_t nt_idx) const;
