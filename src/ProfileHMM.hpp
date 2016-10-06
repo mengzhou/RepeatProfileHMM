@@ -94,7 +94,7 @@ public:
       const std::string &observation) const;
 
   void
-  FisherScoreVector(const std::string sequence,
+  FisherScoreVector(const std::string &sequence,
       std::vector<double> &score) const;
 
   void
@@ -108,6 +108,9 @@ public:
 
   void
   ComplementBackground(void);
+  
+  std::string
+  Consensus(void) const;
 
 private:
   size_t
@@ -172,11 +175,6 @@ private:
 
   void
   load_from_file(const std::string inf);
-
-  double
-  expected_emission_count(const std::string sequence,
-    const matrix &forward, const matrix &backward,
-    const size_t state_idx, const size_t nt_idx) const;
 
   void
   redistribute_prob(matrix &input,

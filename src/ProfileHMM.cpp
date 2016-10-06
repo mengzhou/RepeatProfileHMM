@@ -1053,11 +1053,24 @@ ProfileHMM::state_can_emit(const size_t idx) const {
 void
 ProfileHMM::Print(ostream& out, const bool HUM_READABLE) const {
   out << "#Model length: " << model_len << endl;
+  out << "#Consensus: " << Consensus() << endl;
   out << "#Transition" << endl;
   print_transition(out, HUM_READABLE);
   out << endl << "#Emission" << endl;
   print_emission(out, HUM_READABLE);
   out << "//" << endl;
+}
+
+string
+ProfileHMM::Consensus(void) const {
+  vector<char> bases;
+  for (size_t i = 0; i < model_len; ++i) {
+    const vector<double>::const_iterator max_itr =
+      std::max_element(emission_c[i].begin(), emission_c[i].end());
+    bases.push_back(int2base(max_itr - emission_c[i].begin()));
+  }
+  const string consensus(bases.begin(), bases.end());
+  return consensus;
 }
 
 void
@@ -1388,56 +1401,45 @@ ProfileHMM::load_from_file(const string filename) {
   }
 }
 
-double
-ProfileHMM::expected_emission_count(const string sequence,
-    const matrix &forward, const matrix &backward,
-    const size_t state_idx, const size_t nt_idx) const {
-  vector<double> state_count, nt_count;
-  // sequence position is 0-based
-  // state_idx is 0-based, so state_idx = 0 corresponds to M_1 in the
-  // collapsed matrix
-  const double post_p = posterior_prob(forward);
-  for (size_t i = 0; i < sequence.length() - 1; ++i) {
-    // posterior count of staying at state_idx
-    const double exp_count = forward[i][state_idx] + backward[i][state_idx]
-      - post_p;
-    state_count.push_back(exp_count);
-    if (base2int(sequence[i]) == nt_idx)
-      nt_count.push_back(exp_count);
-  }
-  const double numerator = nt_count.size() > 0 ?
-    smithlab::log_sum_log_vec(nt_count, nt_count.size()) : -1e3;
-  const double denominator = 
-    smithlab::log_sum_log_vec(state_count, state_count.size());
-  return numerator - denominator;
-}
-
 void
-ProfileHMM::FisherScoreVector(const string sequence,
+ProfileHMM::FisherScoreVector(const string &sequence,
     vector<double> &score) const {
   matrix forward, backward;
   forward_algorithm_c(false, false, sequence, forward);
   backward_algorithm_c(false, false, sequence, backward);
-  score.resize(model_len*4, 0.0);
+  // model_len*4: all M states; +4: I_0
+  score.resize(model_len*4+4, 0.0);
+  const double posterior_p = posterior_prob(forward);
 
-  // scores for emission parameters
-  vector<double> expected_count(4, 0.0);
-  for (size_t i = 0; i < score.size(); ++i) {
-    const size_t state_index = i/4;
-    const size_t nt_index = i%4;
-    expected_count[nt_index] = expected_emission_count(sequence, forward,
-        backward, state_index, nt_index);
-    if (nt_index == 3) {
-      const double state_sum =
-        smithlab::log_sum_log_vec(expected_count, expected_count.size());
-      for (size_t j = 0; j < 4; ++j) {
-        score[state_index*4+j] =
-          exp(expected_count[j] - emission_c[state_index][j]) - exp(state_sum);
-      }
+  // scores for states M_1 to M_L, plus I_0
+  for (size_t state_index = 0; state_index < model_len+1; ++state_index) {
+    // posterior count of staying at state_idx
+    vector<double> state_count;
+    for (size_t i = 0; i < forward.size() - 1; ++i) {
+      // the loop is from position 0 to N-2 (0-based coordinates)
+      state_count.push_back(forward[i][state_index] + backward[i][state_index]
+        - posterior_p);
     }
-  }
+    assert(state_count.size() == sequence.length() - 1);
+    const double expected_state_count =
+      exp(smithlab::log_sum_log_vec(state_count, state_count.size()));
 
-  // scores for transition parameters
+    // posterior emission count per nt per state
+    vector<vector<double> > nt_count(4, vector<double>());
+    for (size_t i = 0; i < sequence.length()-1; ++i) {
+      const int nt_idx = base2int(sequence[i]);
+      nt_count[nt_idx].push_back(state_count[i]);
+    }
+    // scores for emission
+    for (size_t nt_idx = 0; nt_idx < 4; ++nt_idx) {
+      const double expected_emission_count =
+        smithlab::log_sum_log_vec(nt_count[nt_idx], nt_count[nt_idx].size());
+      score[state_index*4+nt_idx] = exp(expected_emission_count
+          - emission_c[state_index][nt_idx])
+        - expected_state_count;
+    }
+    // scores for transition
+  }
 }
 
 void
