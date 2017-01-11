@@ -125,15 +125,16 @@ identify_repeats(const ProfileHMM &hmm,
   for (vector<size_t>::const_iterator i = states.begin();
       i < states.end(); ++i) {
     vector<size_t>::const_iterator j = next(i);
-    // find start of region
+    // find start and end of region
     if (*i != bg_state && i == states.begin())
       start = 0;
     else if (*i == bg_state && *j != bg_state)
       start = j - states.begin();
-    // find end of region
     else if ((*i != bg_state && *j == bg_state)
-        || (*i != bg_state && j == states.end())) {
+        || (*i != bg_state && j == states.end())
+        || (*i != bg_state && *j != bg_state && *i > *j))
       end = j - states.begin();
+    if (end > start) {
       const string obs = chr_seq.substr(start, end - start);
       // this is the score using log-odds
       double score =
@@ -160,6 +161,10 @@ identify_repeats(const ProfileHMM &hmm,
       vector<size_t> copy_states(first, last);
       string bits = get_state_bits(copy_states, model_len);
       state_bits.push_back(bits);
+      if (*i != bg_state && *j != bg_state && *i > *j)
+        start = j - states.begin();
+      else
+        start = end;
     }
   }
 }
@@ -262,15 +267,17 @@ main (int argc, const char **argv) {
       vector<GenomicRegion> coordinates;
       for (size_t i = 0; i < chr_seq.size(); ++i) {
         // the forward strand
-        hmm.PosteriorDecoding_c(false, DEBUG, false, chr_seq[i], states);
+        if (DEBUG)
+          cerr << chr_name[i] << endl;
+        hmm.PosteriorDecoding_c(false, DEBUG, true, chr_seq[i], states);
         identify_repeats(hmm, chr_seq[i], states,
           chr_name[i], true, coordinates, state_bits);
         // the reverse strand
-        revcomp_inplace(chr_seq[i]);
-        hmm.ComplementBackground();
-        hmm.PosteriorDecoding_c(false, DEBUG, false, chr_seq[i], states);
-        identify_repeats(hmm, chr_seq[i], states,
-          chr_name[i], false, coordinates, state_bits);
+        //revcomp_inplace(chr_seq[i]);
+        //hmm.ComplementBackground();
+        //hmm.PosteriorDecoding_c(false, DEBUG, false, chr_seq[i], states);
+        //identify_repeats(hmm, chr_seq[i], states,
+        //  chr_name[i], false, coordinates, state_bits);
       }
       zscore_filter(coordinates, 3.0);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();

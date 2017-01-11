@@ -1074,11 +1074,19 @@ ProfileHMM::Consensus(void) const {
 }
 
 void
+ProfileHMM::DebugOutput(void) const {
+  cerr << "Trantision:" << endl;
+  cerr << transition;
+  cerr << "Trantision collapsed:" << endl;
+  cerr << transition_c;
+}
+
+void
 ProfileHMM::print_transition(ostream& out, const bool HUM_READABLE) const {
   const std::streamsize ss = out.precision();
   if (HUM_READABLE)
     out << std::setprecision(4) << std::fixed;
-  out << "#M_0\tI_0\tD_1" << endl << "\t";
+  out << "#Initial\tI_0\tD_1" << endl << "\t";
   if (HUM_READABLE)
     out
       << exp(transition[0][state(0ul, 0, 1).index(model_len)]) << "\t"
@@ -1200,31 +1208,31 @@ ProfileHMM::print_transition(ostream& out, const bool HUM_READABLE) const {
       << endl;
   }
   if (HUM_READABLE) {
-    out << "#I_0\tI_0\tD_1\tE" << endl
+    out << "#I_0\tI_0\tD_1" << endl
       << "\t" << exp(transition[state(0ul,0,1).index(model_len)]
         [state(0ul,0,1).index(model_len)])
       << "\t" << exp(transition[state(0ul,0,1).index(model_len)]
         [state(0ul,1,2).index(model_len)])
-      << "\t" << exp(transition[state(0ul,0,1).index(model_len)].back())
       << endl;
-    out << "#D_L\tI_0\tE" << endl
+    out << "#D_L\tI_0\tD_1" << endl
       << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)]
         [state(0ul,0,1).index(model_len)])
-      << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)].back())
+      << "\t" << exp(transition[state(0ul,model_len,2).index(model_len)]
+        [state(0ul,1,2).index(model_len)])
       << endl;
   }
   else {
-    out << "#I_0\tI_0\tD_1\tE" << endl
+    out << "#I_0\tI_0\tD_1" << endl
       << "\t" << transition[state(0ul,0,1).index(model_len)]
         [state(0ul,0,1).index(model_len)]
       << "\t" << transition[state(0ul,0,1).index(model_len)]
         [state(0ul,1,2).index(model_len)]
-      << "\t" << transition[state(0ul,0,1).index(model_len)].back()
       << endl;
-    out << "#D_L\tI_0\tE" << endl
+    out << "#D_L\tI_0\tD_1" << endl
       << "\t" << transition[state(0ul,model_len,2).index(model_len)]
         [state(0ul,0,1).index(model_len)]
-      << "\t" << transition[state(0ul,model_len,2).index(model_len)].back()
+      << "\t" << transition[state(0ul,model_len,2).index(model_len)]
+        [state(0ul,1,2).index(model_len)]
       << endl;
   }
   out << std::setprecision(ss);
@@ -1360,20 +1368,21 @@ ProfileHMM::load_from_file(const string filename) {
   }
 
   while(getline(in, line) && (line[0] == '#' || line.empty()));
-  // background transition probability
+  // I_0 transition probability
   f = split(line);
   transition[state(0ul,0,1).index(model_len)]
     [state(0ul,0,1).index(model_len)] = stof(f[1]);
   transition[state(0ul,0,1).index(model_len)]
     [state(0ul,1,2).index(model_len)] = stof(f[2]);
-  transition[state(0ul,0,1).index(model_len)].back() = stof(f[3]);
+  //transition[state(0ul,0,1).index(model_len)].back() = stof(f[3]);
 
   while(getline(in, line) && (line[0] == '#' || line.empty()));
-  // ending transition probability
+  // D_L transition probability
   f = split(line);
   transition[state(0ul,model_len,2).index(model_len)]
     [state(0ul,0,1).index(model_len)] = stof(f[1]);
-  transition[state(0ul,model_len,2).index(model_len)].back() = stof(f[2]);
+  transition[state(0ul,model_len,2).index(model_len)]
+    [state(0ul,1,2).index(model_len)] = stof(f[2]);
 
   while(getline(in, line) && (line[0] == '#' || line.empty()));
   // emission
@@ -1476,6 +1485,7 @@ void
 ProfileHMM::collapse_states(void) {
   transition_c = transition;
   const size_t first_non_emis = index_d(1);
+
   vector<size_t> collapse_cols(1, 0);
   for (size_t i = first_non_emis; i < transition[0].size(); ++i)
     collapse_cols.push_back(i);

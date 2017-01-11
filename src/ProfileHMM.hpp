@@ -112,6 +112,9 @@ public:
   std::string
   Consensus(void) const;
 
+  void
+  DebugOutput() const;
+
 private:
   size_t
   index_m(const size_t idx) const;

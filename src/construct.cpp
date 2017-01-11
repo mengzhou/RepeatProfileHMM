@@ -106,14 +106,12 @@ set_emission_prior(matrix &emis_prior) {
 double
 get_5prime_truncation_prior(const size_t model_len,
     const size_t idx) {
-  /*
   const double first_col_weight = 0.5;
   if (idx == 1)
-    return first_col_weight;
+    return log(first_col_weight);
   else
-    return (1.0 - first_col_weight) / (model_len - 1);
-    */
-  return -log(model_len);
+    return log((1.0 - first_col_weight)) - log((model_len - 1));
+  //return -log(model_len);
 }
 
 double
@@ -126,7 +124,8 @@ get_3prime_truncation_prior(const size_t model_len,
   else
     return (1.0 - last_col_weight) / (model_len - 1);
     */
-  return -log(model_len);
+  //return -log(model_len);
+  return log(0.05);
 }
 
 double
@@ -535,8 +534,8 @@ main (int argc, const char **argv) {
     transition[state(0ul, model_len, 0).index(model_len)]
       [right_end.index(model_len)] = 0.0;
     // M_0
-    transition[0][left_end.index(model_len)] = log(0.05);
-    transition[0][state(0ul, 0, 1).index(model_len)] = log(0.95);
+    transition[0][left_end.index(model_len)] = log(0.30);
+    transition[0][state(0ul, 0, 1).index(model_len)] = log(0.70);
     // D_1
     transition[left_end.index(model_len)] =
       normalize_vec(transition[left_end.index(model_len)], true);
@@ -549,14 +548,20 @@ main (int argc, const char **argv) {
       normalize_vec(transition[left_end.index(model_len)], true);
     // I_0
     transition[state(0ul, 0, 1).index(model_len)]
-      [state(0ul, 0, 1).index(model_len)] = log(0.8);
+      [state(0ul, 0, 1).index(model_len)] = log(0.80);
     transition[state(0ul, 0, 1).index(model_len)]
-      [left_end.index(model_len)] = log(0.18);
-    transition[state(0ul, 0, 1).index(model_len)].back() = log(0.02);
+      [left_end.index(model_len)] = log(0.20);
+    //transition[state(0ul, 0, 1).index(model_len)].back() = log(0.02);
     // D_L
+    // the two lines below allow transition only to I_0 and E
+    //transition[right_end.index(model_len)]
+    //  [state(0ul, 0, 1).index(model_len)] = log(0.98);
+    //transition[right_end.index(model_len)].back() = log(0.02);
+    // the two lines below allow transitions only to I_0 and D_1
     transition[right_end.index(model_len)]
-      [state(0ul, 0, 1).index(model_len)] = log(0.98);
-    transition[right_end.index(model_len)].back() = log(0.02);
+      [state(0ul, 0, 1).index(model_len)] = log(0.80);
+    transition[right_end.index(model_len)]
+      [left_end.index(model_len)] = log(0.20);
 
     // 3.2 emissions
     prior = emis_prior[1];
@@ -607,6 +612,7 @@ main (int argc, const char **argv) {
       cerr << endl;
       cerr << "Consensus: " << endl
         << get_consensus(marked_cols, msa) << endl;
+      hmm.DebugOutput();
     }
   }
   catch (const SMITHLABException &e) {
