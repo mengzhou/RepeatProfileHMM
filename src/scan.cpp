@@ -126,23 +126,23 @@ identify_repeats(const ProfileHMM &hmm,
       i < states.end(); ++i) {
     vector<size_t>::const_iterator j = next(i);
     // find start and end of region
-    if (*i != bg_state && i == states.begin())
+    if (*i < bg_state && i == states.begin())
       start = 0;
-    else if (*i == bg_state && *j != bg_state)
+    else if (*i == bg_state && *j < bg_state)
       start = j - states.begin();
-    else if ((*i != bg_state && *j == bg_state)
-        || (*i != bg_state && j == states.end())
-        || (*i != bg_state && *j != bg_state && *i > *j))
+    else if ((*i < bg_state && *j == bg_state)
+        || (*i < bg_state && j == states.end())
+        || (*i < bg_state && *j < bg_state && *i > *j))
       end = j - states.begin();
     if (end > start) {
       const string obs = chr_seq.substr(start, end - start);
       // this is the score using log-odds
-      double score =
-        hmm.PosteriorProb_c(true, obs) / obs.length();
-      // this is the score using reverse sequenc as normalization
-      //string obs_rev(obs.rbegin(), obs.rend());
       //double score =
-      //  hmm.PosteriorProb(true, obs) - hmm.PosteriorProb(true, obs_rev);
+      //  hmm.PosteriorProb_c(true, obs) / obs.length();
+      // this is the score using reverse sequenc as normalization
+      string obs_rev(obs.rbegin(), obs.rend());
+      double score =
+        hmm.PosteriorProb(false, obs) - hmm.PosteriorProb(false, obs_rev);
       string name = "X";
       if (SENSE_STRAND) {
         GenomicRegion new_copy(chr_name, start,
@@ -181,12 +181,11 @@ zscore_filter(vector<GenomicRegion> &coordinates,
   }
   const double mean = std::accumulate(scores.begin(),
       scores.end(), 0.0) / scores.size();
-  const double stdev = std::inner_product(scores.begin(),
-      scores.end(), scores.begin(), 0.0) / scores.size()
-    - mean * mean;
+  const double stdev = std::sqrt(std::inner_product(scores.begin(),
+    scores.end(), scores.begin(), 0.0) / (scores.size()-1) - mean * mean);
   for (vector<GenomicRegion>::iterator i = coordinates.begin();
       i < coordinates.end(); ++i) {
-    (*i).set_score(std::abs((*i).get_score() - mean) / stdev);
+    (*i).set_score(((*i).get_score() - mean) / stdev);
     if ((*i).get_score() > CUT_OFF)
       (*i).set_name("COPY");
     else
@@ -199,6 +198,8 @@ main (int argc, const char **argv) {
   try {
     bool VERBOSE = false;
     bool DEBUG = false;
+    bool NO_LOG_ODDS = false;
+    double z_cutoff = 2.0;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
     //size_t seed = time(0) * getpid();
@@ -210,7 +211,13 @@ main (int argc, const char **argv) {
       "File or directory of chroms (FASTA format; .fa suffix)",
       true, chrom_file);
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
-                      false, out_file);
+      false, out_file);
+    opt_parse.add_opt("no-log", 'n', "Do not use log odds ratio as posterior.",
+      false, NO_LOG_ODDS);
+    opt_parse.add_opt("z-cutoff", 'z',
+      "Z-score cutoff for occurrence identifiation. Default: 2.0;\
+        setting to 0 will disable this functionality.",
+      false, z_cutoff);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
@@ -223,8 +230,11 @@ main (int argc, const char **argv) {
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cout << opt_parse.option_missing_message() << endl
-        << opt_parse.help_message() << endl;
+      cerr << opt_parse.option_missing_message() << endl;
+      return EXIT_FAILURE;
+    }
+    if (z_cutoff < 0) {
+      cerr << "Z-score cutoff must be positive." << endl;
       return EXIT_FAILURE;
     }
     in_par = leftover_args.front();
@@ -251,6 +261,7 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
 
+    size_t file_counter = 1;
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
       vector<string> chr_name, chr_seq;
@@ -263,27 +274,36 @@ main (int argc, const char **argv) {
       vector<string> state_bits;
 
       if (VERBOSE)
-        cerr << "[SCANNING " << chrom->second << "]" << endl;
+        cerr << "[SCANNING " << chrom->second
+          << " " << file_counter++ << " OF "
+          << chrom_files.size() << "]" << endl;
       vector<GenomicRegion> coordinates;
       for (size_t i = 0; i < chr_seq.size(); ++i) {
         // the forward strand
+        if (VERBOSE)
+          cerr << "\t" << i+1 << "/" << chr_seq.size()
+            << "\t" << chr_name[i] << endl;
         if (DEBUG)
           cerr << chr_name[i] << endl;
-        hmm.PosteriorDecoding_c(false, DEBUG, true, chr_seq[i], states);
+        hmm.PosteriorDecoding_c(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
         identify_repeats(hmm, chr_seq[i], states,
           chr_name[i], true, coordinates, state_bits);
         // the reverse strand
-        //revcomp_inplace(chr_seq[i]);
-        //hmm.ComplementBackground();
-        //hmm.PosteriorDecoding_c(false, DEBUG, false, chr_seq[i], states);
-        //identify_repeats(hmm, chr_seq[i], states,
-        //  chr_name[i], false, coordinates, state_bits);
+        revcomp_inplace(chr_seq[i]);
+        hmm.ComplementBackground();
+        hmm.PosteriorDecoding_c(false, false, !NO_LOG_ODDS, chr_seq[i], states);
+        identify_repeats(hmm, chr_seq[i], states,
+          chr_name[i], false, coordinates, state_bits);
       }
-      zscore_filter(coordinates, 3.0);
+      if (z_cutoff - 0.0 > 1e-10) {
+        if (VERBOSE)
+          cerr << "[CALCULATING Z-SCORES]" << endl;
+        zscore_filter(coordinates, z_cutoff);
+      }
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {
-        out << (*i) << "\t" << state_bits[i-coordinates.begin()] << endl;
+        out << *i << "\t" << state_bits[i-coordinates.begin()] << endl;
       }
     }
   }

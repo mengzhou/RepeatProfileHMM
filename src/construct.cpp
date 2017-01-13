@@ -48,31 +48,39 @@ using std::endl;
 
 void
 load_alignment(bool VERBOSE, const string infile,
-    unordered_map<string, string> &msa) {
+    vector<string> &names, vector<string> &seqs) {
+  // sequnce names are truncated in the output of clustalw and muscle,
+  // therefore duplicated names are possible and they cannot be used
+  // as lookup keys
   ifstream infs(infile.c_str());
   string line;
+  size_t index = 0;
 
   while (getline(infs, line)) {
     istringstream iss(line);
     string buffer, name, seq;
     vector<string> tokens;
+    if (line.length() == 0)
+      index = 0;
 
     while (iss >> buffer)
       tokens.push_back(buffer);
     if (tokens.size() == 2 && buffer.find('*') == std::string::npos) {
       name = tokens.front();
       seq = tokens.back();
-      const unordered_map<string, string>::const_iterator repeat(msa.find(name));
-      if (repeat == msa.end()) {
-        msa[name] = seq;
+      ++index;
+      if (index > names.size()) {
+        names.push_back(name);
+        seqs.push_back(seq);
       }
       else {
-        msa[name] = msa[name] + seq;
+        seqs[index-1] = seqs[index-1] + seq;
       }
     }
   }
+  assert(names.size() == seqs.size());
   if (VERBOSE)
-    cerr << "\t" << msa.size() << " SEQUENCES LOADED." << endl;
+    cerr << "\t" << names.size() << " SEQUENCES LOADED." << endl;
 }
 
 void
@@ -124,12 +132,12 @@ get_3prime_truncation_prior(const size_t model_len,
   else
     return (1.0 - last_col_weight) / (model_len - 1);
     */
-  //return -log(model_len);
-  return log(0.05);
+  return -log(model_len);
+  //return log(0.05);
 }
 
 double
-posterior_transition_score(const unordered_map<string, string> &msa,
+posterior_transition_score(const vector<string> &seqs,
     const size_t start, const size_t end,
     const matrix &tran_prior) {
   // there are 3 types of states: M, I, D, so the number of possible
@@ -137,26 +145,26 @@ posterior_transition_score(const unordered_map<string, string> &msa,
   // index for states: M - 0, I - 1, D - 2 corresponding to the
   // transition prior matrix
   vector<vector<size_t> > count(4, vector<size_t>(4, 0));
-  for (unordered_map<string, string>::const_iterator i = msa.begin();
-      i != msa.end(); ++i) {
+  for (vector<string>::const_iterator i = seqs.begin();
+      i < seqs.end(); ++i) {
     // convert base to int with - converted to 4, skipping - in insertion
     // columns (start < nt < end)
     vector<size_t> seq_int;
     string::const_iterator left_bound;
     if (start == 0) {
       seq_int.push_back(5);
-      left_bound = (i->second).begin();
+      left_bound = (*i).begin();
     }
     else
-      left_bound = (i->second).begin() + start - 1;
-    for (string::const_iterator nt = left_bound;nt < (i->second).begin() + end
-        && nt < (i->second).end(); ++nt) {
+      left_bound = (*i).begin() + start - 1;
+    for (string::const_iterator nt = left_bound;nt < (*i).begin() + end
+        && nt < (*i).end(); ++nt) {
       if ((start > 0 && nt == left_bound)
-          || nt == (i->second).begin() + end - 1
+          || nt == (*i).begin() + end - 1
           || base2int(*nt) < 4)
         seq_int.push_back(base2int(*nt));
     }
-    if (end > (i->second).size())
+    if (end > (*i).length())
       seq_int.push_back(5);
     // now get transition counts
     for (vector<size_t>::const_iterator s = seq_int.begin();
@@ -185,16 +193,16 @@ posterior_transition_score(const unordered_map<string, string> &msa,
 }
 
 double
-posterior_emission_score(const unordered_map<string, string> &msa,
+posterior_emission_score(const vector<string> &seqs,
     const size_t start, const size_t end,
     const vector<double> &emis_prior) {
-  if (start == ((msa.begin())->second).size())
+  if (start == seqs.front().size())
     return 0.0;
   vector<size_t> count(4, 0);
-  for (unordered_map<string, string>::const_iterator i = msa.begin();
-      i != msa.end(); ++i) {
+  for (vector<string>::const_iterator i = seqs.begin();
+      i < seqs.end(); ++i) {
     for (size_t pos = start; pos < end; ++pos) {
-      const size_t baseint = base2int((i->second)[pos]);
+      const size_t baseint = base2int((*i)[pos]);
       if (baseint < 4) ++count[baseint];
     }
   }
@@ -211,7 +219,7 @@ posterior_emission_score(const unordered_map<string, string> &msa,
 void
 find_marked_cols_map(const bool VERBOSE,
     vector<bool> &marked,
-    const unordered_map<string, string> &msa,
+    const vector<string> &seqs,
     const matrix &tran_prior,
     const matrix &emis_prior,
     const double lambda) {
@@ -225,9 +233,9 @@ find_marked_cols_map(const bool VERBOSE,
     if (VERBOSE && j % 10 == 0)
       cerr << "\tPROCESSED " << 100 * j / seq_len << "%" << endl;
     for (size_t i = 0; i < j; ++i) {
-      v.push_back(s[i] + posterior_transition_score(msa, i, j, tran_prior)
-          + posterior_emission_score(msa, j, j+1, emis_prior.front())
-          + posterior_emission_score(msa, i+1, j, emis_prior.back())
+      v.push_back(s[i] + posterior_transition_score(seqs, i, j, tran_prior)
+          + posterior_emission_score(seqs, j, j+1, emis_prior.front())
+          + posterior_emission_score(seqs, i+1, j, emis_prior.back())
           + lambda);
     }
     s[j] = *max_element(v.begin(), v.end());
@@ -245,30 +253,30 @@ find_marked_cols_map(const bool VERBOSE,
 
 void
 find_marked_cols_heu(vector<bool> &marked,
-    const unordered_map<string, string> &msa) {
+    const vector<string> &seqs) {
   const size_t seq_len = marked.size();
   for (size_t col = 0; col < seq_len; ++col) {
     size_t match_count = 0;
-    for (unordered_map<string, string>::const_iterator i = msa.begin();
-        i != msa.end(); ++i) {
-      if (base2int(i->second[col]) < 4) ++match_count;
+    for (vector<string>::const_iterator i = seqs.begin();
+        i < seqs.end(); ++i) {
+      if (base2int((*i)[col]) < 4) ++match_count;
     }
-    if (match_count > msa.size() / 2)
+    if (match_count > seqs.size() / 2)
       marked[col] = true;
   }
 }
 
 string
 get_consensus(const vector<bool> &marked,
-    const unordered_map<string, string> &msa) {
+    const vector<string> &seqs) {
   const size_t seq_len = marked.size();
   string consensus = "";
   for (size_t col = 0; col < seq_len; ++col) {
     if (marked[col]) {
       vector<size_t> nt_count(4, 0);
-      for (unordered_map<string, string>::const_iterator i = msa.begin();
-          i != msa.end(); ++i) {
-        const int nt = base2int(i->second[col]);
+      for (vector<string>::const_iterator i = seqs.begin();
+          i < seqs.end(); ++i) {
+        const int nt = base2int((*i)[col]);
         if (nt < 4) ++nt_count[nt];
       }
       vector<size_t>::iterator majority_nt = std::max_element(nt_count.begin(),
@@ -342,9 +350,9 @@ main (int argc, const char **argv) {
     // 1. load alignment
     if (VERBOSE)
       cerr << "[LOADING ALIGNMENT]" << endl;
-    unordered_map<string, string> msa;
-    load_alignment(VERBOSE, inf, msa);
-    if (msa.size() == 0) {
+    vector<string> names, seqs;
+    load_alignment(VERBOSE, inf, names, seqs);
+    if (seqs.size() == 0) {
       cerr << "NO SEQUENCE WAS LOADED. PLEASE CHECK INPUT." << endl;
       return EXIT_FAILURE;
     }
@@ -352,15 +360,15 @@ main (int argc, const char **argv) {
     // 2. compute recursion to find marked (match) columns
     if (VERBOSE)
       cerr << "[FINDING OPTIMAL MATCH COLUMNS]" << endl;
-    vector<bool> marked_cols((msa.begin()->second).length(), false);
+    vector<bool> marked_cols(seqs.front().length(), false);
     matrix tran_prior, emis_prior;
     set_transition_prior(tran_prior);
     set_emission_prior(emis_prior);
     if (USE_HEU)
-      find_marked_cols_heu(marked_cols, msa);
+      find_marked_cols_heu(marked_cols, seqs);
     else
       find_marked_cols_map(VERBOSE,
-          marked_cols, msa, tran_prior, emis_prior, lambda);
+          marked_cols, seqs, tran_prior, emis_prior, lambda);
     
     // 3. estimate probabilities for individual states
     if (VERBOSE)
@@ -380,22 +388,22 @@ main (int argc, const char **argv) {
       find(marked_cols.rbegin(), marked_cols.rend(), true).base() - 1;
     state left_end(0ul, 1, 2);
     state right_end(0ul, model_len, 2);
-    for (unordered_map<string, string>::const_iterator i = msa.begin();
-        i != msa.end(); ++i) {
+    for (vector<string>::const_iterator i = seqs.begin();
+        i < seqs.end(); ++i) {
       // get truncation by jumping to the first and the last non-gap character
       // for the marked columns
       vector<bool>::const_iterator curr_itr = first_marked;
       while(curr_itr < marked_cols.begin() && 
-          (!*curr_itr || i->second[curr_itr - marked_cols.begin()] == '-'))
+          (!*curr_itr || (*i)[curr_itr - marked_cols.begin()] == '-'))
         ++curr_itr;
       const vector<bool>::const_iterator first_nontruncated = curr_itr;
       curr_itr = last_marked; // last_marked is a reverse iterator
       while(curr_itr > first_nontruncated &&
-          (!*curr_itr || i->second[curr_itr - marked_cols.begin()] == '-'))
+          (!*curr_itr || (*i)[curr_itr - marked_cols.begin()] == '-'))
         --curr_itr;
       const vector<bool>::const_iterator last_nontruncated = curr_itr;
       // get counts for the first marked column associating with truncation
-      state curr_state(i->second[first_nontruncated - marked_cols.begin()],
+      state curr_state((*i)[first_nontruncated - marked_cols.begin()],
           1, true);
       transition[left_end.index(model_len)][curr_state.index(model_len)] =
         transition[left_end.index(model_len)][curr_state.index(model_len)] + 1;
@@ -407,7 +415,7 @@ main (int argc, const char **argv) {
       for (vector<bool>::const_iterator j = first_nontruncated + 1;
           j <= last_nontruncated; ++j) {
         if (*j) ++col_idx;
-        curr_state = state(i->second[j - marked_cols.begin()],
+        curr_state = state((*i)[j - marked_cols.begin()],
             col_idx, *j);
         if (curr_state.isvalid())
           seq_state.push_back(curr_state);
@@ -589,10 +597,14 @@ main (int argc, const char **argv) {
 
     // display alignment and marked columns for debug purposes
     if (DEBUG) {
-      for (unordered_map<string, string>::const_iterator i = msa.begin();
-          i != msa.end(); ++i)
-        cerr << i->first << "\t" << i->second << endl;
-      cerr << std::setw(25);
+      // clustalW keeps first 30 letters of the seq name, but
+      // muscle keeps first 32. This is just to make sure the
+      // debug output is compatible with both.
+      const int name_width = (names.front().length() + 8) / 8 * 8;
+      for (size_t i = 0; i < seqs.size(); ++i)
+        cerr << names[i] << "\t" << seqs[i] << endl;
+      //cerr << "MAP columns\t\t\t\t";
+      cerr << std::left << std::setw(name_width) << "MAP columns";
       for (size_t i = 0; i < marked_cols.size(); ++i) {
         if (marked_cols[i])
           cerr << "*";
@@ -600,9 +612,10 @@ main (int argc, const char **argv) {
           cerr << " ";
       }
       cerr << endl;
-      vector<bool> marked_heu((msa.begin()->second).length(), false);
-      find_marked_cols_heu(marked_heu, msa);
-      cerr << std::setw(25);
+      vector<bool> marked_heu(seqs.front().length(), false);
+      find_marked_cols_heu(marked_heu, seqs);
+      //cerr << "Heuristic columns\t\t\t";
+      cerr << std::left << std::setw(name_width) << "Heuristic columns";
       for (size_t i = 0; i < marked_heu.size(); ++i) {
         if (marked_heu[i])
           cerr << "#";
@@ -611,8 +624,8 @@ main (int argc, const char **argv) {
       }
       cerr << endl;
       cerr << "Consensus: " << endl
-        << get_consensus(marked_cols, msa) << endl;
-      hmm.DebugOutput();
+        << get_consensus(marked_cols, seqs) << endl;
+      //hmm.DebugOutput();
     }
   }
   catch (const SMITHLABException &e) {

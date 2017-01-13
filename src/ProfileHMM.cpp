@@ -867,20 +867,20 @@ ProfileHMM::PosteriorDecoding_c(const bool VERBOSE,
 
   const size_t state_num = model_len*2;
   vector<double> xi(state_num, LOG_ZERO);
-  if (DEBUG) {
-    cerr << std::setprecision(4);
-    cerr << "Xi matrix:" << endl;
-    for (size_t state = 0; state < state_num; ++state)
-      cerr << "\t" << state;
-    cerr << endl;
-  }
+  //if (DEBUG) {
+  //  cerr << std::setprecision(4);
+  //  cerr << "Xi matrix:" << endl;
+  //  for (size_t state = 0; state < state_num; ++state)
+  //    cerr << "\t" << state;
+  //  cerr << endl;
+  //}
   for (size_t pos = 0; pos < seq_len; ++pos) {
-    if (DEBUG) cerr << pos;
+    //if (DEBUG) cerr << pos;
     for (size_t state = 0; state < state_num; ++state) {
       xi[state] = forward[pos][state] + backward[pos][state];
-      if (DEBUG) cerr << "\t" << xi[state];
+      //if (DEBUG) cerr << "\t" << xi[state];
     }
-    if (DEBUG) cerr << endl;
+    //if (DEBUG) cerr << endl;
     size_t idx = argmax_vec(xi);
     // idx+1 is because in collased matrix, state[0] is M_1, while in the
     // full matrix state[0] is M_0 which is not included in decoding.
@@ -894,28 +894,28 @@ ProfileHMM::PosteriorDecoding_c(const bool VERBOSE,
         << "\t" << *i
         << "\t" << state_idx_to_str_c(*i) << endl;
 
-    cerr << endl << "Forward matrix:" << endl;
-    for (size_t state = 0; state < forward.front().size(); ++state)
-      cerr << "\t" << state_idx_to_str_c(state);
-    cerr << endl;
-    for (size_t pos = 0; pos < forward.size(); ++pos) {
-      cerr << pos;
-      for (size_t state = 0; state < forward.front().size(); ++state)
-        //cerr << "\t" << exp(forward[pos][state]);
-        cerr << "\t" << forward[pos][state];
-      cerr << endl;
-    }
-    cerr << endl << "Backward matrix:" << endl;
-    for (size_t state = 0; state < backward.front().size(); ++state)
-      cerr << "\t" << state_idx_to_str_c(state);
-    cerr << endl;
-    for (size_t pos = 0; pos < backward.size(); ++pos) {
-      cerr << pos;
-      for (size_t state = 0; state < backward.front().size(); ++state)
-        //cerr << "\t" << exp(backward[pos][state]);
-        cerr << "\t" << backward[pos][state];
-      cerr << endl;
-    }
+    //cerr << endl << "Forward matrix:" << endl;
+    //for (size_t state = 0; state < forward.front().size(); ++state)
+    //  cerr << "\t" << state_idx_to_str_c(state);
+    //cerr << endl;
+    //for (size_t pos = 0; pos < forward.size(); ++pos) {
+    //  cerr << pos;
+    //  for (size_t state = 0; state < forward.front().size(); ++state)
+    //    //cerr << "\t" << exp(forward[pos][state]);
+    //    cerr << "\t" << forward[pos][state];
+    //  cerr << endl;
+    //}
+    //cerr << endl << "Backward matrix:" << endl;
+    //for (size_t state = 0; state < backward.front().size(); ++state)
+    //  cerr << "\t" << state_idx_to_str_c(state);
+    //cerr << endl;
+    //for (size_t pos = 0; pos < backward.size(); ++pos) {
+    //  cerr << pos;
+    //  for (size_t state = 0; state < backward.front().size(); ++state)
+    //    //cerr << "\t" << exp(backward[pos][state]);
+    //    cerr << "\t" << backward[pos][state];
+    //  cerr << endl;
+    //}
   }
 }
 
