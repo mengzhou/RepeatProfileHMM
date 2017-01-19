@@ -14,7 +14,7 @@ class repeat_family:
     self.truncation_lower = trunc_lower
     self.name = name
     
-  def generate( self, size, age = 10 ):
+  def generate( self, size, age = 10, indel_par = 0.0005 ):
     """Generate the sequences of the whole family.
     """
     self.copies = [{"name":"", "trunc_len":0, "mut_sites":[], "seq":""} \
@@ -27,12 +27,12 @@ class repeat_family:
       self.copies[i]["mut_sites"], self.copies[i]["seq"] = \
         self._apply_spontaneous_mutation( trunc_seq, age)
       indel_count, self.copies[i]["seq"] = \
-        self._apply_simple_indel(self.copies[i]["seq"],age)
+        self._apply_simple_indel(self.copies[i]["seq"],age,indel_par)
       self.copies[i]["name"] =  "%s_%d_%s"%(self.name, i+1, "T%d_M%d_I%d"%\
         (self.copies[i]["trunc_len"], len(self.copies[i]["mut_sites"]), \
         indel_count))
 
-  def generate_full_length( self, size, age = 10 ):
+  def generate_full_length( self, size, age = 10, indel_par = 0.0005):
     """Generate sequences of full length copies (minimal truncation).
     """
     self.copies_fl = [{"name":"", "trunc_len":0, "mut_sites":[], "seq":""} \
@@ -47,7 +47,7 @@ class repeat_family:
       self.copies_fl[i]["mut_sites"], self.copies_fl[i]["seq"] = \
         self._apply_spontaneous_mutation( trunc_seq, age)
       indel_count, self.copies_fl[i]["seq"] = \
-        self._apply_simple_indel(self.copies_fl[i]["seq"],age)
+        self._apply_simple_indel(self.copies_fl[i]["seq"],age,indel_par)
       self.copies_fl[i]["name"] =  "%s_%d_%s"%(self.name, i+1, "T%d_M%d_I%d"%\
         (self.copies_fl[i]["trunc_len"], len(self.copies_fl[i]["mut_sites"]), \
         indel_count))
@@ -85,13 +85,13 @@ class repeat_family:
     
     return random.choice(alphabet)
 
-  def _apply_simple_indel( self, seq, age ):
+  def _apply_simple_indel( self, seq, age, p=0.0005 ):
     """Simulate simple short indel mutations.
     """
     # assume the number of indel instances follows a binomial distribution
     # also assume the length of an indel follows a Poisson disttribution
-    p_count = age*0.0004
-    indel_length = 3
+    p_count = age*p
+    indel_length = 5
     # favoring insertion or deletion
     ins_vs_del = 0.4
     site_count = numpy.random.binomial(len(seq), p_count)

@@ -26,7 +26,6 @@
 #include <numeric>
 #include <cmath>
 #include <iomanip>
-#include <unordered_map>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -37,7 +36,6 @@
 using std::vector;
 using std::pair;
 using std::string;
-using std::unordered_map;
 using std::ifstream;
 using std::istringstream;
 using std::ostream;
