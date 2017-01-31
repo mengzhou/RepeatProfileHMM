@@ -36,6 +36,7 @@
 #include "smithlab_os.hpp"
 
 using namespace std;
+typedef unordered_map<string, string> chrom_file_map;
 
 size_t
 index_i(const size_t model_len, const size_t idx) {
@@ -438,19 +439,23 @@ void identify_repeats(const vector<vector<double> > &transition,
 int
 main (int argc, const char **argv) {
   bool VERBOSE = false;
-  string input, in_par, out_par;
-  size_t model_len = 10;
+  string chrom_file, input, in_par, out_par;
+  size_t model_len = 10, max_itr = 50;
   size_t seed = time(0) * getpid();
   vector<vector<double> > transition, emission;
 
   OptionParser opt_parse(argv[0], "Program for profile-HMM.");
 
+  opt_parse.add_opt("chrom", 'c',
+    "File or directory of chroms (FASTA format; .fa suffix)",
+    false, chrom_file);
   opt_parse.add_opt("in", 'i', "Input sequence (string) or a fasta file.",
     false, input);
   opt_parse.add_opt("len", 'l', "Model length.", false, model_len);
+  opt_parse.add_opt("itr", 'r', "Max iteration.", false, max_itr);
   opt_parse.add_opt("seed", 's', "Random seed.", false, seed);
   opt_parse.add_opt("in-params", 'p', "Input parameters file.", false, in_par);
-  opt_parse.add_opt("out-params", 'q', "Output parameters file.", false, out_par);
+  opt_parse.add_opt("out-params", 'o', "Output parameters file.", false, out_par);
   opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
 
   vector<string> leftover_args;
@@ -474,7 +479,13 @@ main (int argc, const char **argv) {
   else
     //load_hmm_parameter(VERBOSE, in_par, transition, emission, model_len);
     hmm = ProfileHMM(in_par);
-  hmm.Print(cout, true);
+  //hmm.Print(cout, true);
+
+  chrom_file_map chrom_files;
+  string fasta_suffix = "fa";
+  if (!chrom_file.empty()) {
+    identify_chromosomes(chrom_file, fasta_suffix, chrom_files);
+  }
 
   //if (!out_par.empty())
   //  write_hmm_parameter(VERBOSE, out_par, transition, emission);
@@ -499,14 +510,17 @@ main (int argc, const char **argv) {
   //  vector<pair<char, size_t> > trace;
   //  vector<size_t> states;
 
-  //  // Learning test
-  //  //if (!leftover_args.empty()) {
-  //  //  ProfileHMM h(leftover_args.front());
-  //  //  h.Print(cout, true);
-  //  //}
-  //  //hmm.Print(cout, true);
-  //  //hmm.Train(VERBOSE, 1e-4, 20, input_seq);
-  //  //hmm.Print(cout, false);
+  // Learning test
+  ofstream outfs;
+  if (!out_par.empty()) outfs.open(out_par.c_str());
+  ostream out(out_par.empty() ? cout.rdbuf() : outfs.rdbuf());
+  for (chrom_file_map::const_iterator chrom = chrom_files.begin();
+      chrom != chrom_files.end(); ++chrom) {
+    vector<string> chr_name, chr_seq;
+    read_fasta_file(chrom->second, chr_name, chr_seq);
+    hmm.Train(VERBOSE, 1e-4, max_itr, chr_seq);
+  }
+  hmm.Print(out, false);
   //  
   //  //Multi family test
   //  if (in_par.find(',') < string::npos) {

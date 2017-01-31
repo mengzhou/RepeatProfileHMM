@@ -596,9 +596,10 @@ ProfileHMM::forward_algorithm_c(const bool VERBOSE,
   if (VERBOSE)
     cerr << "FORWARD ALGORITHM " << seq_len << "x" << state_num << endl;
   forward.resize(seq_len, vector<double>(state_num, LOG_ZERO));
-  for (size_t state = 0; state < state_num; ++state)
-    forward.front()[state] = initial_prob[state]
+  for (size_t state = 0; state < state_num; ++state) {
+    forward.front()[state] = transition_c.front()[state]
       + emission_c[state][base2int(observation.front())];
+  }
 
   for (size_t pos = 1; pos < seq_len; ++pos) {
     if (VERBOSE && pos % 10000 == 0)
@@ -631,11 +632,11 @@ ProfileHMM::backward_algorithm_c(const bool VERBOSE,
     const bool USE_LOG_ODDS,
     const string &observation,
     matrix &backward) const {
-  if (VERBOSE)
-    cerr << "BACKWARD ALGORITHM" << endl;
   const size_t seq_len = observation.length();
   const size_t state_num = model_len*2;
   backward.resize(seq_len, vector<double>(state_num, LOG_ZERO));
+  if (VERBOSE)
+    cerr << "BACKWARD ALGORITHM " << seq_len << "x" << state_num << endl;
   for (size_t state = 0; state < state_num; ++state)
     backward.back()[state] = 0.0;
 
@@ -668,59 +669,30 @@ void
 ProfileHMM::Train(const bool VERBOSE,
     const double tolerance,
     const size_t max_iterations,
-    const string &observation) {
-  const size_t seq_len = observation.length();
-  matrix forward, backward;
-  forward_algorithm(VERBOSE, false, observation, forward);
-  backward_algorithm(VERBOSE, false, observation, backward);
-  double ll = -1e10;
-  double ll_new = posterior_prob(forward);
+    const vector<string> &observations) {
+  double ll = -1e10, ll_new = -1.0;
   if (VERBOSE)
-    cerr << "ITR\tPREV_LL\tCURR_LL\tDELTA" << endl;
-  for (size_t itr = 0;
-      //itr < max_iterations;
-      std::abs((ll_new - ll)/ll_new) > tolerance && itr < max_iterations;
-      ++itr) {
-    std::swap(ll, ll_new);
-    matrix e_trans(total_size,
-        vector<double>(total_size, LOG_ZERO));
-    matrix e_emiss(total_size,
-        vector<double>(emission.front().size(), LOG_ZERO));
+    cerr << "ITR\tCURR_LL\tDELTA" << endl;
+  for (size_t itr = 0; itr < max_iterations; ++itr) {
+    matrix e_trans(total_size, vector<double>(total_size, LOG_ZERO));
+    matrix e_emiss(total_size, vector<double>(4, LOG_ZERO));
+    vector<double> ll_list;
     // Expectation
-    // transition
-    for (map<size_t, vector<size_t> >::const_iterator trans =
-        transitions_to.begin(); trans != transitions_to.end(); ++trans) {
-      const size_t i = trans->first;
-      for (vector<size_t>::const_iterator j = trans->second.begin();
-          j < trans->second.end(); ++j) {
-        vector<double> list;
-        for (size_t pos = 0; pos <= seq_len; ++pos) {
-          if (state_can_emit(*j)) {
-            if (pos < seq_len)
-              list.push_back(forward[pos][i] + transition[i][*j]
-                  + emission[*j][base2int(observation[pos])]
-                  + backward[pos + 1][*j]);
-          }
-          else {
-            list.push_back(forward[pos][i] + transition[i][*j]
-                + backward[pos][*j]);
-          }
-        }
-        e_trans[i][*j] = smithlab::log_sum_log_vec(list, list.size()) - ll;
-      }
+    for (vector<string>::const_iterator seq = observations.begin();
+        seq < observations.end(); ++seq) {
+      matrix forward, backward;
+      forward_algorithm(false, false, *seq, forward);
+      backward_algorithm(false, false, *seq, backward);
+      ll_list.push_back(posterior_prob(forward));
+
+      train_expectation(VERBOSE, *seq, forward, backward, e_trans, e_emiss);
     }
-    // emission
-    for (size_t i = index_m(1); i < index_d(1); ++i) {
-      matrix list(4, vector<double>());
-      for (size_t pos = 0; pos < seq_len; ++pos) {
-        list[base2int(observation[pos])].push_back(
-            forward[pos+1][i] + backward[pos+1][i]);
-      }
-      for (size_t k = 0; k < 4; ++k) {
-        e_emiss[i][k] =
-          smithlab::log_sum_log_vec(list[k], list[k].size()) - ll;
-      }
-    }
+    ll_new = smithlab::log_sum_log_vec(ll_list, ll_list.size());
+    if (VERBOSE)
+      cerr << itr + 1 << "/" << max_iterations << "\t"
+        << ll_new << "\t" << std::abs((ll_new - ll)/ll_new) << endl;
+    if (std::abs((ll_new - ll)/ll_new) < tolerance) break;
+    std::swap(ll, ll_new);
 
     // Maximization
     // transition
@@ -729,22 +701,19 @@ ProfileHMM::Train(const bool VERBOSE,
         from != transitions_to.end(); ++from) {
       vector<double> list;
       for (vector<size_t>::const_iterator to = from->second.begin();
-          to < from->second.end(); ++to) {
+          to < from->second.end(); ++to)
         list.push_back(e_trans[from->first][*to]);
-      }
       const double sum = smithlab::log_sum_log_vec(list, list.size());
       for (vector<size_t>::const_iterator to = from->second.begin();
-          to < from->second.end(); ++to) {
+          to < from->second.end(); ++to)
         transition[from->first][*to] = e_trans[from->first][*to] - sum;
-      }
     }
     // emission
     for (size_t i = index_m(1); i < index_d(1); ++i) {
       const double sum =
         smithlab::log_sum_log_vec(e_emiss[i], e_emiss[i].size());
-      for (size_t j = 0; j < 4; ++j) {
+      for (size_t j = 0; j < 4; ++j)
         emission[i][j] = e_emiss[i][j] - sum;
-      }
     }
     // add pseudocount and normalize
     pseudo_count();
@@ -753,16 +722,50 @@ ProfileHMM::Train(const bool VERBOSE,
       normalize_vec_inplace(*row, true);
     for (size_t i = index_m(1); i < index_d(1); ++i)
       normalize_vec_inplace(emission[i], true);
+  }
+  collapse_states();
+}
 
-    // update forward and backward prob using updated parameters
-    forward_algorithm(false, false, observation, forward);
-    backward_algorithm(false, false, observation, backward);
-    // Need some function for posterior probability here!
-    ll_new = posterior_prob(forward);
-    if (VERBOSE) {
-      cerr << itr + 1 << "/" << max_iterations << "\t"
-        << ll << "\t" << ll_new << "\t" 
-        << std::abs((ll_new - ll)/ll_new) << endl;
+void
+ProfileHMM::train_expectation (const bool VERBOSE,
+    const string &observation,
+    const matrix &forward, const matrix &backward,
+    matrix &e_trans, matrix &e_emiss) const {
+  const size_t seq_len = observation.length();
+  const double ll = posterior_prob(forward);
+  // transition
+  for (map<size_t, vector<size_t> >::const_iterator trans =
+      transitions_to.begin(); trans != transitions_to.end(); ++trans) {
+    const size_t i = trans->first;
+    for (vector<size_t>::const_iterator j = trans->second.begin();
+        j < trans->second.end(); ++j) {
+      vector<double> list;
+      for (size_t pos = 0; pos <= seq_len; ++pos) {
+        if (state_can_emit(*j)) {
+          if (pos < seq_len)
+            list.push_back(forward[pos][i] + transition[i][*j]
+                + emission[*j][base2int(observation[pos])]
+                + backward[pos + 1][*j]);
+        }
+        else {
+          list.push_back(forward[pos][i] + transition[i][*j]
+              + backward[pos][*j]);
+        }
+      }
+      e_trans[i][*j] = log_sum_log(e_trans[i][*j],
+        smithlab::log_sum_log_vec(list, list.size()) - ll);
+    }
+  }
+  // emission
+  for (size_t i = index_m(1); i < index_d(1); ++i) {
+    matrix list(4, vector<double>());
+    for (size_t pos = 0; pos < seq_len; ++pos) {
+      list[base2int(observation[pos])].push_back(
+          forward[pos+1][i] + backward[pos+1][i]);
+    }
+    for (size_t k = 0; k < 4; ++k) {
+      e_emiss[i][k] = log_sum_log(e_emiss[i][k],
+        smithlab::log_sum_log_vec(list[k], list[k].size()) - ll);
     }
   }
 }
@@ -1506,6 +1509,7 @@ ProfileHMM::collapse_states(void) {
   assert(transition_c.size() == model_len*2);
   assert(transition_c[0].size() == model_len*2);
 
+  emission_c.erase(emission_c.begin(), emission_c.end());
   for (size_t i = 1; i < first_non_emis; ++i) {
     emission_c.push_back(emission[i]);
   }

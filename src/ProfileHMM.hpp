@@ -63,7 +63,7 @@ public:
   Train(const bool VERBOSE,
       const double tolerance,
       const size_t max_iterations,
-      const std::string &observation);
+      const std::vector<std::string> &observations);
 
   void
   SampleSequence(const bool VERBOSE,
@@ -185,6 +185,11 @@ private:
 
   void
   collapse_states(void);
+
+  void
+  train_expectation(const bool VERBOSE, const std::string &seq,
+    const matrix &forward, const matrix &backward,
+    matrix &e_trans, matrix &e_emiss) const;
 
   size_t model_len;
   size_t total_size;
