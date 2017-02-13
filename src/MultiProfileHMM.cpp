@@ -408,26 +408,26 @@ MultiProfileHMM::PosteriorDecoding(const bool VERBOSE,
       //cerr << i - states.begin() + 1 << "\t" << *i << endl;
       cerr << i - states.begin() + 1 << "\t" << xi_idx_to_str(*i) << endl;
 
-    cerr << endl << "Forward matrix:" << endl;
-    for (size_t state = 0; state < forward.front().size(); ++state)
-      cerr << "\t" << state;
-    cerr << endl;
-    for (size_t pos = 0; pos < forward.size(); ++pos) {
-      cerr << pos;
-      for (size_t state = 0; state < forward.front().size(); ++state)
-        cerr << "\t" << forward[pos][state];
-      cerr << endl;
-    }
-    cerr << endl << "Backward matrix:" << endl;
-    for (size_t state = 0; state < backward.front().size(); ++state)
-      cerr << "\t" << state;
-    cerr << endl;
-    for (size_t pos = 0; pos < backward.size(); ++pos) {
-      cerr << pos;
-      for (size_t state = 0; state < backward.front().size(); ++state)
-        cerr << "\t" << backward[pos][state];
-      cerr << endl;
-    }
+    //cerr << endl << "Forward matrix:" << endl;
+    //for (size_t state = 0; state < forward.front().size(); ++state)
+    //  cerr << "\t" << state;
+    //cerr << endl;
+    //for (size_t pos = 0; pos < forward.size(); ++pos) {
+    //  cerr << pos;
+    //  for (size_t state = 0; state < forward.front().size(); ++state)
+    //    cerr << "\t" << forward[pos][state];
+    //  cerr << endl;
+    //}
+    //cerr << endl << "Backward matrix:" << endl;
+    //for (size_t state = 0; state < backward.front().size(); ++state)
+    //  cerr << "\t" << state;
+    //cerr << endl;
+    //for (size_t pos = 0; pos < backward.size(); ++pos) {
+    //  cerr << pos;
+    //  for (size_t state = 0; state < backward.front().size(); ++state)
+    //    cerr << "\t" << backward[pos][state];
+    //  cerr << endl;
+    //}
   }
 }
 

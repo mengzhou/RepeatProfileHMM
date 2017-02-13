@@ -167,10 +167,12 @@ operator<<(std::ostream &s, const matrix &m) {
     s << i - m.begin();
     for (vector<double>::const_iterator j = i->begin();
         j < i->end(); ++j) {
-      s << "\t" << exp(*j);
+      //s << "\t" << exp(*j);
+      s << "\t" << -*j;
       list.push_back(*j);
     }
-    s << "\t" << exp(smithlab::log_sum_log_vec(list, list.size())) << endl;
+    //s << "\t" << exp(smithlab::log_sum_log_vec(list, list.size())) << endl;
+    s << "\t" << -smithlab::log_sum_log_vec(list, list.size()) << endl;
   }
   return s;
 }

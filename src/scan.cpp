@@ -99,27 +99,33 @@ load_hmm_parameter(const string &input_file,
 
 string
 get_state_bits(const vector<size_t> &copy_states,
+    const size_t offset,
     const size_t width) {
   // states are indexed as 0=M_1~M_L; L=I_0~I_L-1
+  // plus offset
   string bits(width, '0');
   for (vector<size_t>::const_iterator i = copy_states.begin();
-      i < copy_states.end(); ++i)
-    if (*i >= 0 && *i < width)
-      bits[*i] = '1';
+      i < copy_states.end(); ++i) {
+    const size_t idx = *i - offset;
+    if (idx >= 0 && idx < width)
+      bits[idx] = '1';
+  }
   return bits;
 }
 
 void
 identify_repeats(const ProfileHMM &hmm,
+    const size_t bg_state,
+    const size_t offset,
     const string &chr_seq,
     const vector<size_t> &states,
     const string chr_name,
     const bool SENSE_STRAND,
     vector<GenomicRegion> &coordinates,
     vector<string> &state_bits) {
+  // use bg_state = model_len, offset = 0 for collapsed matrix decoding;
+  // use bg_state = model_len+1, offset = 1 for complete matrix decoding.
   const size_t model_len = hmm.Length();
-  //const size_t bg_state = state(0ul, 0, 1).index(model_len);
-  const size_t bg_state = model_len;
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
@@ -159,7 +165,7 @@ identify_repeats(const ProfileHMM &hmm,
       vector<size_t>::const_iterator first = states.begin() + start;
       vector<size_t>::const_iterator last = states.begin() + end;
       vector<size_t> copy_states(first, last);
-      string bits = get_state_bits(copy_states, model_len);
+      string bits = get_state_bits(copy_states, offset, model_len);
       state_bits.push_back(bits);
       if (*i != bg_state && *j != bg_state && *i > *j)
         start = j - states.begin();
@@ -279,21 +285,20 @@ main (int argc, const char **argv) {
           << chrom_files.size() << "]" << endl;
       vector<GenomicRegion> coordinates;
       for (size_t i = 0; i < chr_seq.size(); ++i) {
-        // the forward strand
         if (VERBOSE)
           cerr << "\t" << i+1 << "/" << chr_seq.size()
             << "\t" << chr_name[i] << endl;
         if (DEBUG)
           cerr << chr_name[i] << endl;
-        hmm.PosteriorDecoding_c(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
-        identify_repeats(hmm, chr_seq[i], states,
+        hmm.PosteriorDecoding(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
+        identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
           chr_name[i], true, coordinates, state_bits);
-        // the reverse strand
+        
         revcomp_inplace(chr_seq[i]);
         hmm.ComplementBackground();
-        hmm.PosteriorDecoding_c(false, false, !NO_LOG_ODDS, chr_seq[i], states);
-        identify_repeats(hmm, chr_seq[i], states,
-          chr_name[i], false, coordinates, state_bits);
+        hmm.PosteriorDecoding(false, false, !NO_LOG_ODDS, chr_seq[i], states);
+        identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
+          chr_name[i], true, coordinates, state_bits);
       }
       if (z_cutoff - 0.0 > 1e-10) {
         if (VERBOSE)

@@ -441,6 +441,7 @@ main (int argc, const char **argv) {
   bool VERBOSE = false;
   string chrom_file, input, in_par, out_par;
   size_t model_len = 10, max_itr = 50;
+  double tolerance = 1e-4;
   size_t seed = time(0) * getpid();
   vector<vector<double> > transition, emission;
 
@@ -453,6 +454,7 @@ main (int argc, const char **argv) {
     false, input);
   opt_parse.add_opt("len", 'l', "Model length.", false, model_len);
   opt_parse.add_opt("itr", 'r', "Max iteration.", false, max_itr);
+  opt_parse.add_opt("tolerance", 't', "EM tolerance.", false, tolerance);
   opt_parse.add_opt("seed", 's', "Random seed.", false, seed);
   opt_parse.add_opt("in-params", 'p', "Input parameters file.", false, in_par);
   opt_parse.add_opt("out-params", 'o', "Output parameters file.", false, out_par);
@@ -518,7 +520,7 @@ main (int argc, const char **argv) {
       chrom != chrom_files.end(); ++chrom) {
     vector<string> chr_name, chr_seq;
     read_fasta_file(chrom->second, chr_name, chr_seq);
-    hmm.Train(VERBOSE, 1e-4, max_itr, chr_seq);
+    hmm.Train(VERBOSE, tolerance, max_itr, chr_seq);
   }
   hmm.Print(out, false);
   //  

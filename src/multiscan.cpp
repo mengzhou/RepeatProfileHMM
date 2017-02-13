@@ -189,29 +189,40 @@ main (int argc, const char **argv) {
     if (VERBOSE)
       cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
 
+    size_t file_counter = 1;
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
-      string chr_seq;
-      read_fasta_file(chrom->second, chrom->first, chr_seq);
-      if (chr_seq.empty())
-        throw SMITHLABException("could not find chrom: " + chrom->first);
+      vector<string> chr_name, chr_seq;
+      read_fasta_file(chrom->second, chr_name, chr_seq);
+      if (chr_name.size() < 1)
+        throw SMITHLABException("could not find any sequence in: "
+            + chrom->second);
 
       vector<size_t> states;
 
       if (VERBOSE)
-        cerr << "[SCANNING 1/2]" << endl;
+        cerr << "[SCANNING " << chrom->second
+          << " " << file_counter++ << " OF "
+          << chrom_files.size() << "]" << endl;
       vector<GenomicRegion> coordinates;
-      multihmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
-      identify_repeats_multifamily(multihmm, chr_seq, states,
-        chrom->first, true, coordinates);
-      if (VERBOSE)
-        cerr << "[SCANNING 2/2]" << endl;
-      revcomp_inplace(chr_seq);
-      multihmm.ComplementBackground();
-      multihmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq, states);
-      identify_repeats_multifamily(multihmm, chr_seq, states,
-        chrom->first, false, coordinates);
-      zscore_filter(coordinates, 5.0);
+      for (size_t i = 0; i < chr_seq.size(); ++i) {
+        // the forward strand
+        if (VERBOSE)
+          cerr << "\t" << i+1 << "/" << chr_seq.size()
+            << "\t" << chr_name[i] << endl;
+        if (DEBUG)
+          cerr << chr_name[i] << endl;
+        multihmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq[i], states);
+        identify_repeats_multifamily(multihmm, chr_seq[i], states,
+          chr_name[i], true, coordinates);
+        // the reverse strand
+        revcomp_inplace(chr_seq[i]);
+        multihmm.ComplementBackground();
+        multihmm.PosteriorDecoding(VERBOSE, DEBUG, true, chr_seq[i], states);
+        identify_repeats_multifamily(multihmm, chr_seq[i], states,
+          chr_name[i], false, coordinates);
+      }
+      zscore_filter(coordinates, 1.0);
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {
