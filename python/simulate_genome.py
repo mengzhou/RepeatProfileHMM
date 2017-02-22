@@ -3,166 +3,16 @@
 Can simulate some mutations while inserting.
 """
 import sys
-import random, numpy
+import random
 from optparse import OptionParser
 
-class repeat_family:
-  def __init__( self, consensus, name = "Copy", trunc_par = 0.01, \
-      trunc_lower = 20 ):
-    self.consensus = consensus
-    self.truncation_par = trunc_par
-    self.truncation_lower = trunc_lower
-    self.name = name
-    
-  def generate( self, size, age = 10, indel_par = 0.0005 ):
-    """Generate the sequences of the whole family.
-    """
-    self.copies = [{"name":"", "trunc_len":0, "mut_sites":[], "seq":""} \
-      for i in xrange(size)]
-
-    for i in xrange(size):
-      trunc_seq, trunc_len = \
-        self._apply_truncated(self.truncation_par, self.truncation_lower)
-      self.copies[i]["trunc_len"] = len(self.consensus) - trunc_len
-      self.copies[i]["mut_sites"], self.copies[i]["seq"] = \
-        self._apply_spontaneous_mutation( trunc_seq, age)
-      indel_count, self.copies[i]["seq"] = \
-        self._apply_simple_indel(self.copies[i]["seq"],age,indel_par)
-      self.copies[i]["name"] =  "%s_%d_%s"%(self.name, i+1, "T%d_M%d_I%d"%\
-        (self.copies[i]["trunc_len"], len(self.copies[i]["mut_sites"]), \
-        indel_count))
-
-  def generate_full_length( self, size, age = 10, indel_par = 0.0005):
-    """Generate sequences of full length copies (minimal truncation).
-    """
-    self.copies_fl = [{"name":"", "trunc_len":0, "mut_sites":[], "seq":""} \
-      for i in xrange(size)]
-
-    for i in xrange(size):
-      trunc_len = 0
-      trunc_seq = self.consensus
-      trunc_seq, trunc_len = \
-        self._apply_truncated(self.truncation_par, int(len(self.consensus)*0.95))
-      self.copies_fl[i]["trunc_len"] = len(self.consensus) - trunc_len
-      self.copies_fl[i]["mut_sites"], self.copies_fl[i]["seq"] = \
-        self._apply_spontaneous_mutation( trunc_seq, age)
-      indel_count, self.copies_fl[i]["seq"] = \
-        self._apply_simple_indel(self.copies_fl[i]["seq"],age,indel_par)
-      self.copies_fl[i]["name"] =  "%s_%d_%s"%(self.name, i+1, "T%d_M%d_I%d"%\
-        (self.copies_fl[i]["trunc_len"], len(self.copies_fl[i]["mut_sites"]), \
-        indel_count))
-      
-  def _apply_truncated( self, p, lower):
-    """Generate one repeat sequence. This simulates the process of
-    L1 reverse-transcription, i.e. truncation.
-    """
-    # assuming the truncation follows a truncated geometric distribution
-    length = numpy.random.geometric(p)
-    # trunc_length is the length of remaining sequence after truncation
-    trunc_length = lower + \
-      length%(len(self.consensus)-lower) + 1
-    truncated = self.consensus[-trunc_length:]
-
-    return truncated, trunc_length
-
-  def _apply_spontaneous_mutation( self, seq, age ):
-    """Simulate spontaneous mutation.
-    """
-    p = age*0.01
-    site_count = numpy.random.binomial(len(seq), p)
-    sites = sorted(list(numpy.random.choice(len(seq), site_count)))
-  
-    mutated = [seq[i] for i in xrange(len(seq))]
-    for i in sites:
-      mutated[i] = self.__point_mutation(mutated[i])
-  
-    return sites, "".join(mutated)
-
-  def __point_mutation( self, nt ):
-    alphabet = ["a", "c", "g", "t"]
-    nt = nt.lower()
-    alphabet.remove(nt)
-    
-    return random.choice(alphabet)
-
-  def _apply_simple_indel( self, seq, age, p=0.0005 ):
-    """Simulate simple short indel mutations.
-    """
-    # assume the number of indel instances follows a binomial distribution
-    # also assume the length of an indel follows a Poisson disttribution
-    p_count = age*p
-    indel_length = 5
-    # favoring insertion or deletion
-    ins_vs_del = 0.4
-    site_count = numpy.random.binomial(len(seq), p_count)
-    if site_count == 0:
-      return site_count, seq
-    else:
-      # simulate all mutations
-      sites = sorted(list(numpy.random.choice(len(seq), site_count)))
-      indels = {}.fromkeys(sites)
-      for i in sites:
-        if random.random() < ins_vs_del:
-          # insertion
-          indels[i] = [0, self.__poisson_seq(indel_length)]
-        else:
-          # deletion
-          indels[i] = [1, numpy.random.poisson(indel_length)]
-
-      # apply these mutations
-      mutated = seq[:sites[0]]
-      for i in xrange(len(sites)-1):
-        if indels[sites[i]][0] == 0:
-          mutated += indels[sites[i]][1]
-          mutated += seq[sites[i]:sites[i+1]]
-        else:
-          mutated += seq[sites[i]+indels[sites[i]][1]:sites[i+1]]
-      i = len(sites) - 1
-      if indels[sites[i]][0] == 0:
-        mutated += indels[sites[i]][1]
-        mutated += seq[sites[i]:]
-      else:
-        mutated += seq[sites[i]+indels[sites[i]][1]:]
-
-      return site_count, mutated
-
-  def __poisson_seq( self, p = 3 ):
-    length =  numpy.random.poisson(p)
-    alphabet = ["a", "c", "g", "t"]
-    seq = "".join([alphabet[i] for i in numpy.random.randint(0,3,length)])
-    return seq
-
-def load_fasta( inf ):
-  """Load fasta into a string.
-  """
-  infh = open(inf, 'r')
-  l = infh.readline()
-  name = l[1:].strip()
-  seq = ""
-  for l in infh:
-    seq += l.strip()
-  infh.close()
-
-  return name, seq
+from utils import *
+from mutation_simulation import *
 
 def generate_insertion_sites( genome_length, num ):
   """Generate insertion sites by random sampling.
   """
   return sorted(random.sample(xrange(genome_length), num))
-
-def text_wrap( text, width = 50 ):
-  if len(text) < width:
-    return text + "\n"
-
-  bin = len(text) / width
-  new_text = ""
-  for i in xrange(bin):
-    new_text += text[i*width:(i+1)*width] + "\n"
-  new_text += text[(i+1)*width:]
-  if new_text[-1] != "\n":
-    new_text += "\n"
-
-  return new_text
 
 def parse_str_list(option, opt, value, parser):
   setattr(parser.values, option.dest, value.split(','))
