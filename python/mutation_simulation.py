@@ -133,19 +133,19 @@ class repeat_copy:
     merged_subs = merge_dict(subs, self.subs)
     merged_indels = merge_dict(indels, self.indels)
     merged_tandems = merge_dict(tandems, self.tandems)
-    self._apply_substitution(merged_subs)
     self._apply_indel(merged_indels)
     self._apply_tandem_repeat(merged_tandems)
     if trunc_len == 0:
       self._apply_truncation(self.trunc_len)
     else:
       self._apply_truncation(trunc_len)
+    self._apply_substitution(merged_subs)
 
   def _self_mutate(self):
-    self._apply_substitution(self.subs)
     self._apply_indel(self.indels)
     self._apply_tandem_repeat(self.tandems)
     self._apply_truncation(self.trunc_len)
+    self._apply_substitution(self.subs)
 
   def _get_label(self):
     num_sub = len(self.subs)
@@ -162,7 +162,7 @@ class repeat_copy:
     """
     if len(subs) == 0:
       return
-    sites = sorted(subs.keys())
+    sites = sorted([i for i in subs.keys() if i < len(self.actual_seq)])
     mutated = [self.actual_seq[i] for i in xrange(len(self.actual_seq))]
     for i in sites:
       mutated[i] = subs[i]

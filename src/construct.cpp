@@ -603,7 +603,12 @@ main (int argc, const char **argv) {
       for (size_t i = 0; i < seqs.size(); ++i)
         cerr << names[i] << "\t" << seqs[i] << endl;
       //cerr << "MAP columns\t\t\t\t";
-      cerr << std::left << std::setw(name_width) << "MAP columns";
+      size_t col_count = 0;
+      for (vector<bool>::const_iterator i = marked_cols.begin();
+          i < marked_cols.end(); ++i)
+        if (*i) ++col_count;
+      cerr << std::left << std::setw(name_width) << "MAP columns ("
+        + std::to_string(col_count) + ")";
       for (size_t i = 0; i < marked_cols.size(); ++i) {
         if (marked_cols[i])
           cerr << "*";
@@ -613,8 +618,12 @@ main (int argc, const char **argv) {
       cerr << endl;
       vector<bool> marked_heu(seqs.front().length(), false);
       find_marked_cols_heu(marked_heu, seqs);
-      //cerr << "Heuristic columns\t\t\t";
-      cerr << std::left << std::setw(name_width) << "Heuristic columns";
+      col_count = 0;
+      for (vector<bool>::const_iterator i = marked_heu.begin();
+          i < marked_heu.end(); ++i)
+        if (*i) ++col_count;
+      cerr << std::left << std::setw(name_width) << "Heuristic columns ("
+        + std::to_string(col_count) + ")";
       for (size_t i = 0; i < marked_heu.size(); ++i) {
         if (marked_heu[i])
           cerr << "#";

@@ -205,7 +205,7 @@ main (int argc, const char **argv) {
     bool VERBOSE = false;
     bool DEBUG = false;
     bool NO_LOG_ODDS = false;
-    double z_cutoff = 2.0;
+    double z_cutoff = 1.0;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
     //size_t seed = time(0) * getpid();
@@ -221,7 +221,7 @@ main (int argc, const char **argv) {
     opt_parse.add_opt("no-log", 'n', "Do not use log odds ratio as posterior.",
       false, NO_LOG_ODDS);
     opt_parse.add_opt("z-cutoff", 'z',
-      "Z-score cutoff for occurrence identifiation. Default: 2.0;\
+      "Z-score cutoff for occurrence identifiation. Default: 1.0;\
         setting to 0 will disable this functionality.",
       false, z_cutoff);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
@@ -298,7 +298,7 @@ main (int argc, const char **argv) {
         hmm.ComplementBackground();
         hmm.PosteriorDecoding(false, false, !NO_LOG_ODDS, chr_seq[i], states);
         identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-          chr_name[i], true, coordinates, state_bits);
+          chr_name[i], false, coordinates, state_bits);
       }
       if (z_cutoff - 0.0 > 1e-10) {
         if (VERBOSE)

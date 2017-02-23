@@ -95,7 +95,7 @@ def main():
     # the number of the simulated families is the maximum unit count
     subs = mutator.substitution(opt.age, opt.con_seq)
     indels = mutator.indel(opt.age, con_len)
-    tandems = mutator.tandem_repeat(con_len, 1)
+    tandems = mutator.tandem_repeat(con_len)
     rfamily = repeat_family("M#%d"%(i+1), opt.age, \
         opt.con_seq, unit_counts.count(i), mutator, subs, indels, tandems)
     repeat_families.append(rfamily)
@@ -122,8 +122,10 @@ def main():
     repeat_name = "%s_%d"%(opt.con_name, repeat_idx+1)
     repeat_seq = ""
     for i in range(count):
+      # i=0 is the 3'-most monomer, therefore the last one;
+      # then the last repeat family is the 5'-most one.
       repeat_seq = repeat_seq + \
-          repeat_families[i].copies[repeat_idx].actual_seq
+          repeat_families[count-i-1].copies[repeat_idx].actual_seq
       # 5' truncation here
     joint_outf.write(">%s\n"%repeat_name)
     joint_outf.write(text_wrap(repeat_seq))
