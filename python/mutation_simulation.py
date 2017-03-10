@@ -1,7 +1,7 @@
 """Simulation related classes.
 """
 import sys
-import random, numpy
+import numpy
 
 from utils import *
 
@@ -63,7 +63,7 @@ class mutations:
   def tandem_repeat(self, seq_length, SITE_MIN = 0, SITE_MAX = 3):
     #SITE_MIN = 0
     #SITE_MAX = 3
-    SITE_ALPHA = 2
+    SITE_ALPHA = 3
     SITE_BETA = 5
     site_count = int(numpy.round(\
       numpy.random.beta(SITE_ALPHA, SITE_BETA)*(SITE_MAX - SITE_MIN))+SITE_MIN)
@@ -122,10 +122,10 @@ class repeat_copy:
     return "<repeat_copy> %s %s %s"%(self.name, self.init_seq, self.label)
 
   def __str__(self):
-    return "\t".join([self.label, self.init_seq, self.actual_seq])
+    return "\t".join([self.name, self.label, self.init_seq, self.actual_seq])
 
   def fasta(self, out = sys.stdout):
-    out.write(">%s\n"%self.label)
+    out.write(">%s|%s\n"%(self.name, self.label))
     out.write(text_wrap(self.actual_seq))
 
   def additional_mutation(self, subs, indels, tandems, trunc_len):
@@ -154,7 +154,7 @@ class repeat_copy:
     num_deletion = count(1)
     num_tandems = len(self.tandems)
 
-    self.label = "%s_S%d_I%d_D%d_R%d_T%d"%(self.name, 
+    self.label = "S%dI%dD%dR%dT%d"%(\
         num_sub, num_insertion, num_deletion, num_tandems, self.trunc_len)
 
   def _apply_substitution(self, subs):
@@ -233,7 +233,7 @@ class repeat_family:
 
   def fasta(self, out = sys.stdout):
     for i in self.copies.values():
-      out.write(">%s\n"%(self.label+"|"+i.label))
+      out.write(">%s\n"%(i.name))
       out.write(text_wrap(i.actual_seq))
 
   def generate_copies(self, no_tandem = False, no_trunc = False):
@@ -257,6 +257,9 @@ class repeat_family:
     for i in self.copies.values():
       if numpy.random.rand() <= frac:
         i.additional_mutation(self.subs, self.indels, self.tandems, 0)
+        i.label = self.label + "|" + i.label
+      else:
+        i.label = "NULL|" + i.label
 
   def _get_label(self):
     num_sub = len(self.subs)
@@ -265,11 +268,11 @@ class repeat_family:
     num_deletion = count(1)
     num_tandems = len(self.tandems)
 
-    self.label = "%s_S%d_I%d_D%d_R%d"%(self.name, \
+    self.label = "S%dI%dD%dR%d"%(\
         num_sub, num_insertion, num_deletion, num_tandems)
 
   def _get_copy_name(self, idx):
     name = self.name
     width = int(numpy.log10(self.num))+1
     idx_format = "%0"+str(width)+"d"
-    return "%s_%s_%s|"%(name, idx_format%idx, self.label)
+    return "%s_%s|%s"%(name, idx_format%idx, self.label)

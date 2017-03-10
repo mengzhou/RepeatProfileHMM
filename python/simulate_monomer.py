@@ -2,7 +2,7 @@
 """Simulate tandem repeat sequences (monomers) with 5' truncation.
 """
 import sys
-import random, numpy
+import numpy
 from optparse import OptionParser
 
 from utils import *
@@ -27,7 +27,8 @@ def truncate_gamma(seq, shape=12.374916, scale=6.749954):
   return seq[-trunc_length:]
 
 def opt_validation(parser, opt):
-  if not opt.consensus or not opt.joint_output or not opt.sep_output:
+  if not opt.consensus or not opt.joint_output or not opt.sep_output \
+      or not opt.mut_info:
     parser.print_help()
     sys.exit(0)
 
@@ -45,20 +46,22 @@ def main():
   parser.add_option("-c", "--consensus", action="store", type="string", \
     dest="consensus", help="The consensus sequence of the monomer." +\
     " Can be a FASTA file or a string.")
-  parser.add_option("-o", "--output", action="store", type="string",
+  parser.add_option("-j", "--joint-output", action="store", type="string",
     dest="joint_output", help="Output file for the simulated promoter sequence.")
   parser.add_option("-m", "--monomer-output", action="store", type="string",
     dest="sep_output", help="Output file for the simulated monomer sequence, "+\
         "with monomers listed separatedly.")
+  parser.add_option("-u", "--mut-info", action="store", type="string",
+    dest="mut_info", help="Output file for the simulated mutation information.")
   parser.add_option("-n", "--num", action="store", type="int",
     default=100, dest="number", help="Number of simulated monomers." +\
     " Default: 100")
   parser.add_option("-s", "--substitution", action="store", type="float",
     dest="sub_par", help="Parameter for substitution probability. "+\
-    "Defalut: 0.01", default=0.01)
+    "Defalut: 0.02", default=0.02)
   parser.add_option("-i", "--indel", action="store", type="float",
     dest="indel_par", help="Parameter for indel probability. "+\
-    "Defalut: 0.0005", default=0.0005)
+    "Defalut: 0.0008", default=0.0008)
   parser.add_option("-t", "--truncation", action="store", type="float",
     dest="trunc_par", help="Parameter for average truncation proportion. "+\
     "Defalut: 0.35", default=0.35)
@@ -74,6 +77,7 @@ def main():
 
   joint_outf = open(opt.joint_output, 'w')
   separate_outf = open(opt.sep_output, 'w')
+  mut_outf = open(opt.mut_info, 'w')
 
   unit_counts = []
   for i in xrange(opt.number):
@@ -96,8 +100,8 @@ def main():
     subs = mutator.substitution(opt.age, opt.con_seq)
     indels = mutator.indel(opt.age, con_len)
     tandems = mutator.tandem_repeat(con_len)
-    rfamily = repeat_family("M#%d"%(i+1), opt.age, \
-        opt.con_seq, unit_counts.count(i), mutator, subs, indels, tandems)
+    rfamily = repeat_family("M%d"%i, opt.con_seq, opt.age,\
+        unit_counts.count(i), mutator, subs, indels, tandems)
     repeat_families.append(rfamily)
 
   for repeat_idx,count in enumerate(unit_counts):
@@ -109,19 +113,27 @@ def main():
         trunc_len = mutator.trunc_len(con_len)
       else:
         trunc_len = 0
-      monomer_name = "%s_%d#%d"%(opt.con_name, repeat_idx+1, monomer_idx+1)
+      monomer_name = "%s_%d#M%d"%(opt.con_name, repeat_idx, monomer_idx)
       monomer_unit = repeat_copy(monomer_name, opt.con_seq, repeat_idx,
           subs, indels, tandems, trunc_len)
       repeat_families[monomer_idx].copies[repeat_idx] = monomer_unit
 
   for family in repeat_families:
-    family.familywise_mutate(frac=0.5)
+    family.familywise_mutate(frac=opt.frac)
     family.fasta(separate_outf)
 
+  header = "\t".join(("#Seq_name", "Family_ID", "Family_label", \
+    "Copy_ID", "Copy_label")) + "\n"
+  mut_outf.write(header)
   for repeat_idx,count in enumerate(unit_counts):
-    repeat_name = "%s_%d"%(opt.con_name, repeat_idx+1)
+    repeat_name = "%s_%d"%(opt.con_name, repeat_idx)
     repeat_seq = ""
     for i in range(count):
+      fam_label, copy_label = \
+          repeat_families[count-i-1].copies[repeat_idx].label.split("|")
+      mut_outf.write("\t".join((repeat_name, str(count-i-1), \
+          fam_label.split("_")[-1], str(repeat_idx), \
+          copy_label.split("_")[-1])) + "\n")
       # i=0 is the 3'-most monomer, therefore the last one;
       # then the last repeat family is the 5'-most one.
       repeat_seq = repeat_seq + \
@@ -132,6 +144,7 @@ def main():
 
   joint_outf.close()
   separate_outf.close()
+  mut_outf.close()
 
 if __name__ == "__main__":
   main()

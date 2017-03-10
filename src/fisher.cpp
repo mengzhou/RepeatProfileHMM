@@ -107,7 +107,7 @@ main (int argc, const char **argv) {
       const size_t index = i - copies.begin();
       vector<double> score;
       hmm.FisherScoreVector(copy_seq[index], score);
-      out << *i;
+      out << *i << "\t" << copy_seq[index].size();
       for (vector<double>::const_iterator j = score.begin();
           j < score.end(); ++j)
         out << "\t" << *j;

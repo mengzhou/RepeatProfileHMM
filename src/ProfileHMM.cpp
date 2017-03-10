@@ -1477,6 +1477,7 @@ ProfileHMM::FisherScoreVector(const string &sequence,
           + emission_c[idx_curr_i][base2int(sequence[i+1])]
           + backward[i+1][idx_curr_i]);
         if (state_index < model_len - 2)
+          // M_L-1 does not have next D
           m_to_next_d.push_back(forward[i][state_index]
             + transition_c[state_index][idx_next_d]
             + emission_c[idx_next_d][base2int(sequence[i+1])]
@@ -1511,7 +1512,7 @@ ProfileHMM::FisherScoreVector(const string &sequence,
   for (size_t state_index = model_len+1;state_index < model_len*2;
       ++state_index) {
     // posterior transition count per state of interest
-    // I_1 to I_L-2
+    // I_1 to I_L-1
     vector<double> state_count;
     for (size_t i = 0; i < forward.size() - 1; ++i) {
       state_count.push_back(forward[i][state_index] + backward[i][state_index]
@@ -1534,6 +1535,7 @@ ProfileHMM::FisherScoreVector(const string &sequence,
         + emission_c[idx_curr_i][base2int(sequence[i+1])]
         + backward[i+1][idx_curr_i]);
       if (state_index < model_len * 2 - 1)
+        // I_L-1 does not have next D
         i_to_next_d.push_back(forward[i][state_index]
           + transition_c[state_index][idx_next_d]
           + emission_c[idx_next_d][base2int(sequence[i+1])]
