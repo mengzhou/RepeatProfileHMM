@@ -9,7 +9,7 @@ from optparse import OptionParser
 from utils import *
 from mutation_simulation import *
 
-def uni_ancestor(clade, mutator, active_list, generation, \
+def uni_ancestor_burst(clade, mutator, active_list, generation, \
     age_increment, descendant_count):
   """Sample from the current family as the ancestor, and generate descendants
   assuming the only ancestor gave rise to all descendants.
@@ -31,17 +31,55 @@ def uni_ancestor(clade, mutator, active_list, generation, \
     family_idx += 1
 
   for idx in xrange(clade_size-len(active_list)):
-    old_family = clade[idx]
-    for copy_id in old_family.copies.keys():
-      cons = old_family.copies[copy_id].init_seq
-      subs = mutator.substitution(age_increment, cons)
-      indels = mutator.indel(age_increment, len(cons))
-      tandems = {}
-      trunc_len = 0
-      old_family.copies[copy_id].additional_mutation(subs, indels,\
-          tandems, trunc_len)
+    clade[idx].aging(age_increment)
 
   return clade
+
+def uni_ancestor_continuous(clade, mutator, age_increment, ancestor_list, \
+    max_family_size, max_clade_size):
+  """Simulate descendant copies one by one, and add mutations to all current
+  repeats by age_increment.
+  ancestor_list format: [[family_idx, copy_idx, generation_id]]
+  """
+  to_deactivate = []
+  for i in xrange(len(ancestor_list)):
+    family = clade[ancestor_list[i][0]]
+    ancestor = family.copies[ancestor_list[i][1]]
+    rt_subs = mutator.substitution(age_increment*1.5, ancestor.actual_seq)
+    rt_indels = mutator.indel(age_increment*1.5, len(ancestor.actual_seq))
+    rt_tandems = mutator.tandem_repeat(len(ancestor.actual_seq), 0, 1)
+    #rt_tandems = {}
+    rt_trunc = mutator.trunc_len(len(ancestor.actual_seq))
+    new_copy = repeat_copy("%s_%d"%(family.name, len(family.copies)), \
+        ancestor.actual_seq, len(family.copies), rt_subs, rt_indels, \
+        rt_tandems, rt_trunc)
+    family.copies[len(family.copies)] = new_copy
+    if len(family.copies) > max_family_size:
+      to_deactivate.append(i)
+      if len(clade) <= max_clade_size:
+        potential_ancestors = family.get_most_likely_mc()
+        if len(potential_ancestors) > 0:
+          new_ancestor_id = potential_ancestors[0]
+          new_ancestor = family.copies[new_ancestor_id]
+          new_family = repeat_family("%s.%d"%(family.name[:2], \
+              ancestor_list[i][2]+1), new_ancestor.actual_seq,\
+              0, 1, mutator, {}, {}, {})
+          new_family.copies[0] = family.copies.pop(new_ancestor_id)
+          new_family.copies[0].name = new_family.copies[0].name+"*"
+          clade.append(new_family)
+          ancestor_list.append([len(clade)-1, 0, ancestor_list[i][2]+1])
+
+  ancestor_list = [ancestor_list[i] for i in xrange(len(ancestor_list))\
+      if i not in to_deactivate]
+
+  for idx in xrange(len(clade)):
+    clade[idx].aging(age_increment)
+
+  if len(ancestor_list) == 0:
+    return clade
+  else:
+    return uni_ancestor_continuous(clade, mutator, age_increment, \
+        ancestor_list, max_family_size, max_clade_size)
 
 def opt_validation(parser, opt):
   if not opt.consensus or not opt.joint_output or not opt.sep_output \
@@ -97,18 +135,33 @@ def main():
   #mut_outf = open(opt.mut_info, 'w')
 
   con_len = len(opt.con_seq)
-  size = 50
   mutator = mutations(opt.sub_par, opt.indel_par, opt.trunc_par)
-  init_family = repeat_family("F0", opt.con_seq, opt.step,\
-        size, mutator, {}, {}, {})
-  init_family.generate_copies(True, True)
 
-  clade = [init_family]
-  curr_active = [0]
-  for generation in xrange(1, opt.number):
-    # only the latest family is active, i.e. subject to sampling of ancenstor
-    clade = uni_ancestor(clade, mutator, curr_active, generation, opt.step, size)
-    curr_active = [generation-1, generation]
+  ########## burst simulation ##########
+  #size = 50
+  #init_family = repeat_family("F0", opt.con_seq, opt.step,\
+  #      size, mutator, {}, {}, {})
+  #init_family.generate_copies(True, True)
+  #clade = [init_family]
+  #curr_active = [0]
+  #for generation in xrange(1, opt.number):
+  #  # only the latest family is active, i.e. subject to sampling of ancenstor
+  #  clade = uni_ancestor_burst(clade, mutator, curr_active, generation, \
+  #      opt.step, size)
+  #  curr_active = [generation-1, generation]
+  ########## burst simulation ##########
+
+  ########## continuous simulation ##########
+  init_family1 = repeat_family("F0", opt.con_seq, 1.0, 1, mutator, {}, {}, {})
+  init_family1.generate_copies(True, True)
+  init_family2 = repeat_family("F1", opt.con_seq, 1.0, 1, mutator, {}, {}, {})
+  init_family2.generate_copies(True, True)
+  clade = [init_family1]
+  ancestor_list = [[0, 0, 0]]
+  #clade = [init_family1, init_family2]
+  #ancestor_list = [[0, 0, 0], [1, 0, 0]]
+  clade = uni_ancestor_continuous(clade, mutator, opt.step, ancestor_list, 50, 6)
+  ########## continuous simulation ##########
 
   for family in clade:
     family.fasta(separate_outf)
