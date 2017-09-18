@@ -61,18 +61,16 @@ class mutations:
     return indels
 
   def tandem_repeat(self, seq_length, SITE_MIN = 0, SITE_MAX = 3):
-    #SITE_MIN = 0
-    #SITE_MAX = 3
-    SITE_ALPHA = 3
-    SITE_BETA = 5
+    SITE_ALPHA = 2
+    SITE_BETA = 7
     site_count = int(numpy.round(\
       numpy.random.beta(SITE_ALPHA, SITE_BETA)*(SITE_MAX - SITE_MIN))+SITE_MIN)
     tandems = {}
     if site_count > 0:
       sites = list(numpy.random.choice(seq_length, site_count, replace=False))
-      LEN_MIN = 4
-      LEN_MAX = 10
-      LEN_ALPHA = 4
+      LEN_MIN = 3
+      LEN_MAX = 8
+      LEN_ALPHA = 3
       LEN_BETA = 4
       for i in sites:
         length = int(numpy.round(\
@@ -134,7 +132,18 @@ class repeat_copy:
     out.write(">%s|%s\n"%(self.name, self.label))
     out.write(text_wrap(self.actual_seq))
 
-  def additional_mutation(self, subs, indels, tandems, trunc_len):
+  def add_mutation(self, subs, indels, tandems):
+    merged_subs = merge_dict(subs, self.subs)
+    merged_indels = merge_dict(indels, self.indels)
+    merged_tandems = merge_dict(tandems, self.tandems)
+    self.subs = merged_subs
+    self.indels = merged_indels
+    self.tandems = merged_tandems
+
+    self._self_mutate()
+    self._get_label()
+
+  def external_mutation(self, subs, indels, tandems, trunc_len):
     self.actual_seq = self.init_seq
     merged_subs = merge_dict(subs, self.subs)
     merged_indels = merge_dict(indels, self.indels)
@@ -148,6 +157,7 @@ class repeat_copy:
     self._apply_substitution(merged_subs)
 
   def _self_mutate(self):
+    self.actual_seq = self.init_seq
     self._apply_indel(self.indels)
     self._apply_tandem_repeat(self.tandems)
     self._apply_truncation(self.trunc_len)
@@ -240,8 +250,9 @@ class repeat_family:
 
   def fasta(self, out = sys.stdout):
     for i in self.copies.values():
-      out.write(">%s\n"%(i.name))
-      out.write(text_wrap(i.actual_seq))
+      i.fasta(out)
+      #out.write(">%s\n"%(i.name))
+      #out.write(text_wrap(i.actual_seq))
 
   def generate_copies(self, no_tandem = False, no_trunc = False):
     for i in xrange(self.num):
@@ -256,17 +267,49 @@ class repeat_family:
       else:
         trunc_len = self.mutator.trunc_len_beta(len(self.consensus))
       rep_id = i
-      new = repeat_copy(self._get_copy_name(i+1), self.consensus,\
+      new = repeat_copy(self._get_copy_name(i), self.consensus,\
           rep_id, subs, indels, tandems, trunc_len)
       self.copies[rep_id] = new
 
   def familywise_mutate(self, frac = 1.0):
     for i in self.copies.values():
       if numpy.random.rand() <= frac:
-        i.additional_mutation(self.subs, self.indels, self.tandems, 0)
+        i.external_mutation(self.subs, self.indels, self.tandems, 0)
         i.label = self.label + "|" + i.label
       else:
         i.label = "NULL|" + i.label
+
+  def aging(self, increment):
+    """Make the whole family older by adding random mutations to individual
+    copies according to the age increment.
+    """
+    for copy_id in self.copies.keys():
+      repeat = self.copies[copy_id]
+      new_subs = self.mutator.substitution(increment, repeat.actual_seq)
+      new_indels = self.mutator.indel(increment, len(repeat.actual_seq))
+      new_tandems = {}
+      repeat.add_mutation(new_subs, new_indels, new_tandems)
+
+    self.age += increment
+
+  def get_most_likely_mc(self, count = 1, max_trunc_bp = 10):
+    """Sort all copies based on the truncation length, and sample from those
+    that were not heavily truncated, i.e. the most likely master copies.
+    Criteria:
+      1. sorted descending by total amount of mutations from the consensus
+      2. trunc length smaller than max_trunc_bp
+    Note that the returned list can be empty
+    """
+    pool = sorted(self.copies.items(), reverse=True, \
+        key=lambda x:len(x[1].subs) + len(x[1].indels) + len(x[1].tandems))
+    candidates = [repeat[0] for repeat in pool \
+        if repeat[1].trunc_len <= max_trunc_bp]
+    if len(candidates) >= count:
+      return numpy.random.choice(candidates, count, replace=False)
+    elif len(candidates) > 0:
+      return candidates
+    else:
+      return []
 
   def _get_label(self):
     num_sub = len(self.subs)
@@ -282,4 +325,5 @@ class repeat_family:
     name = self.name
     width = int(numpy.log10(self.num))+1
     idx_format = "%0"+str(width)+"d"
-    return "%s_%s|%s"%(name, idx_format%idx, self.label)
+    #return "%s_%s|%s"%(name, idx_format%idx, self.label)
+    return "%s_%s"%(name, idx_format%idx)
