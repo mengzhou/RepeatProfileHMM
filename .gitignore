@@ -23,6 +23,7 @@ construct
 scan
 multiscan
 fisher
+fit
 
 # no other testing stuff
 tmp*

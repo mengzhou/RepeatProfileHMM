@@ -518,6 +518,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
         for (vector<size_t>::const_iterator j = i->second.begin();
             j < i->second.end(); ++j) {
           list.push_back(forward[pos-1][*j] + transition[*j][state_idx]);
+        }
         if (USE_LOG_ODDS)
           forward[pos][state_idx] =
             smithlab::log_sum_log_vec(list, list.size())
@@ -527,7 +528,6 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
           forward[pos][state_idx] =
             smithlab::log_sum_log_vec(list, list.size())
             + emission[state_idx][curr_baseint];
-        }
       }
       else {
         for (vector<size_t>::const_iterator j = i->second.begin();
@@ -686,7 +686,7 @@ ProfileHMM::Train(const bool VERBOSE,
     const vector<string> &observations) {
   double ll = -1e10, ll_new = -1.0;
   if (VERBOSE)
-    cerr << "ITR\tCURR_LL\tDELTA" << endl;
+    cerr << "ITR\tCURR_NLL\tDELTA" << endl;
   matrix e_trans, e_emiss;
   for (size_t itr = 0; itr < max_iterations; ++itr) {
     e_trans.clear();
@@ -707,7 +707,7 @@ ProfileHMM::Train(const bool VERBOSE,
     ll_new = smithlab::log_sum_log_vec(ll_list, ll_list.size());
     if (VERBOSE)
       cerr << itr + 1 << "/" << max_iterations << "\t"
-        << ll_new << "\t" << std::abs((ll_new - ll)/ll_new) << endl;
+        << -1.0 * ll_new << "\t" << std::abs((ll_new - ll)/ll_new) << endl;
     if (std::abs((ll_new - ll)/ll_new) < tolerance) break;
     std::swap(ll, ll_new);
 
@@ -740,11 +740,11 @@ ProfileHMM::Train(const bool VERBOSE,
     for (size_t i = index_m(1); i < index_d(1); ++i)
       normalize_vec_inplace(emission[i], true);
   }
-  for (size_t i = index_m(1); i < index_d(1); ++i) {
-    const double sum =
-      smithlab::log_sum_log_vec(e_emiss[i], e_emiss[i].size());
-    cout << i << "\t" << exp(sum) << endl;
-  }
+  //for (size_t i = index_m(1); i < index_d(1); ++i) {
+  //  const double sum =
+  //    smithlab::log_sum_log_vec(e_emiss[i], e_emiss[i].size());
+  //  cout << i << "\t" << exp(sum) << endl;
+  //}
   collapse_states();
 }
 
@@ -841,36 +841,36 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
     states.push_back(idx);
   }
   if (DEBUG) {
-    cerr << "State sequence:" << endl;
+    //cerr << "State sequence:" << endl;
     for (vector<size_t>::const_iterator i = states.begin();
         i < states.end(); ++i)
-      cerr << i - states.begin() + 1
-        << "\t" << *i
+      cerr << i - states.begin()
+        //<< "\t" << *i
         << "\t" << state_idx_to_str(*i) << endl;
 
-    cerr << std::setprecision(4);
-    cerr << endl << "Forward matrix:" << endl;
-    for (size_t state = 0; state < forward.front().size(); ++state)
-      cerr << "\t" << state_idx_to_str(state);
-    cerr << endl;
-    for (size_t pos = 0; pos < forward.size(); ++pos) {
-      cerr << pos;
-      for (size_t state = 0; state < forward.front().size(); ++state)
-        //cerr << "\t" << exp(forward[pos][state]);
-        cerr << "\t" << forward[pos][state];
-      cerr << endl;
-    }
-    cerr << endl << "Backward matrix:" << endl;
-    for (size_t state = 0; state < backward.front().size(); ++state)
-      cerr << "\t" << state_idx_to_str(state);
-    cerr << endl;
-    for (size_t pos = 0; pos < backward.size(); ++pos) {
-      cerr << pos;
-      for (size_t state = 0; state < backward.front().size(); ++state)
-        //cerr << "\t" << exp(backward[pos][state]);
-        cerr << "\t" << backward[pos][state];
-      cerr << endl;
-    }
+    //cerr << std::setprecision(4);
+    //cerr << endl << "Forward matrix:" << endl;
+    //for (size_t state = 0; state < forward.front().size(); ++state)
+    //  cerr << "\t" << state_idx_to_str(state);
+    //cerr << endl;
+    //for (size_t pos = 0; pos < forward.size(); ++pos) {
+    //  cerr << pos;
+    //  for (size_t state = 0; state < forward.front().size(); ++state)
+    //    //cerr << "\t" << exp(forward[pos][state]);
+    //    cerr << "\t" << forward[pos][state];
+    //  cerr << endl;
+    //}
+    //cerr << endl << "Backward matrix:" << endl;
+    //for (size_t state = 0; state < backward.front().size(); ++state)
+    //  cerr << "\t" << state_idx_to_str(state);
+    //cerr << endl;
+    //for (size_t pos = 0; pos < backward.size(); ++pos) {
+    //  cerr << pos;
+    //  for (size_t state = 0; state < backward.front().size(); ++state)
+    //    //cerr << "\t" << exp(backward[pos][state]);
+    //    cerr << "\t" << backward[pos][state];
+    //  cerr << endl;
+    //}
   }
 }
 
@@ -1456,33 +1456,33 @@ ProfileHMM::FisherScoreVector(const string &sequence,
     const double expected_state_count =
       exp(smithlab::log_sum_log_vec(state_count, state_count.size()));
 
-    vector<vector<double> > nt_count(4, vector<double>());
+    vector<vector<double> > nt_count(4, vector<double>(1, LOG_ZERO));
     vector<double> m_to_next_m, m_to_curr_i, m_to_next_d;
-    const size_t idx_next_m = state_index + 1;
-    const size_t idx_curr_i = state_index + model_len;
-    const size_t idx_next_d = idx_next_m + 1;
+    //const size_t idx_next_m = state_index + 1;
+    //const size_t idx_curr_i = state_index + model_len;
+    //const size_t idx_next_d = idx_next_m + 1;
     for (size_t i = 0; i < sequence.length()-1; ++i) {
       // posterior emission count per nt per state
       const int nt_idx = base2int(sequence[i]);
       nt_count[nt_idx].push_back(state_count[i]);
       // posterior transition count per state of interest
-      if (state_index < model_len - 1) {
-        // M_1 to M_L-1
-        m_to_next_m.push_back(forward[i][state_index]
-          + transition_c[state_index][idx_next_m]
-          + emission_c[idx_next_m][base2int(sequence[i+1])]
-          + backward[i+1][idx_next_m]);
-        m_to_curr_i.push_back(forward[i][state_index]
-          + transition_c[state_index][idx_curr_i]
-          + emission_c[idx_curr_i][base2int(sequence[i+1])]
-          + backward[i+1][idx_curr_i]);
-        if (state_index < model_len - 2)
-          // M_L-1 does not have next D
-          m_to_next_d.push_back(forward[i][state_index]
-            + transition_c[state_index][idx_next_d]
-            + emission_c[idx_next_d][base2int(sequence[i+1])]
-            + backward[i+1][idx_next_d]);
-      }
+      //if (state_index < model_len - 1) {
+      //  // M_1 to M_L-1
+      //  m_to_next_m.push_back(forward[i][state_index]
+      //    + transition_c[state_index][idx_next_m]
+      //    + emission_c[idx_next_m][base2int(sequence[i+1])]
+      //    + backward[i+1][idx_next_m]);
+      //  m_to_curr_i.push_back(forward[i][state_index]
+      //    + transition_c[state_index][idx_curr_i]
+      //    + emission_c[idx_curr_i][base2int(sequence[i+1])]
+      //    + backward[i+1][idx_curr_i]);
+      //  if (state_index < model_len - 2)
+      //    // M_L-1 does not have next D
+      //    m_to_next_d.push_back(forward[i][state_index]
+      //      + transition_c[state_index][idx_next_d]
+      //      + emission_c[idx_next_d][base2int(sequence[i+1])]
+      //      + backward[i+1][idx_next_d]);
+      //}
     }
     // scores for emission
     for (size_t nt_idx = 0; nt_idx < 4; ++nt_idx) {
@@ -1492,69 +1492,70 @@ ProfileHMM::FisherScoreVector(const string &sequence,
           - emission_c[state_index][nt_idx])
         - expected_state_count;
     }
-    // scores for transition
-    if (state_index < model_len - 1) {
-      score.push_back(exp(smithlab::log_sum_log_vec(m_to_next_m,
-          m_to_next_m.size()) - posterior_p
-          - transition_c[state_index][idx_next_m])
-        - expected_state_count);
-      score.push_back(exp(smithlab::log_sum_log_vec(m_to_curr_i,
-          m_to_curr_i.size()) - posterior_p
-          - transition_c[state_index][idx_curr_i])
-        - expected_state_count);
-      if (state_index < model_len - 2)
-        score.push_back(exp(smithlab::log_sum_log_vec(m_to_next_d,
-            m_to_next_d.size()) - posterior_p
-            - transition_c[state_index][idx_next_d])
-          - expected_state_count);
-    }
+    // scores for expected state count (normalization purpose)
+    score.push_back(smithlab::log_sum_log_vec(state_count, state_count.size()));
+    // scores for transition, M states only
+    //if (state_index < model_len - 1) {
+    //  score.push_back(exp(smithlab::log_sum_log_vec(m_to_next_m,
+    //      m_to_next_m.size()) - posterior_p
+    //      - transition_c[state_index][idx_next_m])
+    //    - expected_state_count);
+    //  score.push_back(exp(smithlab::log_sum_log_vec(m_to_curr_i,
+    //      m_to_curr_i.size()) - posterior_p
+    //      - transition_c[state_index][idx_curr_i])
+    //    - expected_state_count);
+    //  if (state_index < model_len - 2)
+    //    score.push_back(exp(smithlab::log_sum_log_vec(m_to_next_d,
+    //        m_to_next_d.size()) - posterior_p
+    //        - transition_c[state_index][idx_next_d])
+    //      - expected_state_count);
+    //}
   }
-  for (size_t state_index = model_len+1;state_index < model_len*2;
-      ++state_index) {
-    // posterior transition count per state of interest
-    // I_1 to I_L-1
-    vector<double> state_count;
-    for (size_t i = 0; i < forward.size() - 1; ++i) {
-      state_count.push_back(forward[i][state_index] + backward[i][state_index]
-        - posterior_p);
-    }
-    assert(state_count.size() == sequence.length() - 1);
-    const double expected_state_count =
-      exp(smithlab::log_sum_log_vec(state_count, state_count.size()));
-    vector<double> i_to_next_m, i_to_curr_i, i_to_next_d;
-    const size_t idx_next_m = state_index - model_len;
-    const size_t idx_curr_i = state_index;
-    const size_t idx_next_d = idx_next_m + 1;
-    for (size_t i = 0; i < sequence.length()-1; ++i) {
-      i_to_next_m.push_back(forward[i][state_index]
-        + transition_c[state_index][idx_next_m]
-        + emission_c[idx_next_m][base2int(sequence[i+1])]
-        + backward[i+1][idx_next_m]);
-      i_to_curr_i.push_back(forward[i][state_index]
-        + transition_c[state_index][idx_curr_i]
-        + emission_c[idx_curr_i][base2int(sequence[i+1])]
-        + backward[i+1][idx_curr_i]);
-      if (state_index < model_len * 2 - 1)
-        // I_L-1 does not have next D
-        i_to_next_d.push_back(forward[i][state_index]
-          + transition_c[state_index][idx_next_d]
-          + emission_c[idx_next_d][base2int(sequence[i+1])]
-          + backward[i+1][idx_next_d]);
-    }
-    score.push_back(exp(smithlab::log_sum_log_vec(i_to_next_m,
-        i_to_next_m.size()) - posterior_p
-        - transition_c[state_index][idx_next_m])
-      - expected_state_count);
-    score.push_back(exp(smithlab::log_sum_log_vec(i_to_curr_i,
-        i_to_curr_i.size()) - posterior_p
-        - transition_c[state_index][idx_curr_i])
-      - expected_state_count);
-    if (state_index < model_len * 2 - 1)
-      score.push_back(exp(smithlab::log_sum_log_vec(i_to_next_d,
-          i_to_next_d.size()) - posterior_p
-          - transition_c[state_index][idx_next_d])
-        - expected_state_count);
-  }
+  // posterior transition count per state of interest for I_1 to I_L-1
+  //for (size_t state_index = model_len+1;state_index < model_len*2;
+  //    ++state_index) {
+  //  vector<double> state_count;
+  //  for (size_t i = 0; i < forward.size() - 1; ++i) {
+  //    state_count.push_back(forward[i][state_index] + backward[i][state_index]
+  //      - posterior_p);
+  //  }
+  //  assert(state_count.size() == sequence.length() - 1);
+  //  const double expected_state_count =
+  //    exp(smithlab::log_sum_log_vec(state_count, state_count.size()));
+  //  vector<double> i_to_next_m, i_to_curr_i, i_to_next_d;
+  //  const size_t idx_next_m = state_index - model_len;
+  //  const size_t idx_curr_i = state_index;
+  //  const size_t idx_next_d = idx_next_m + 1;
+  //  for (size_t i = 0; i < sequence.length()-1; ++i) {
+  //    i_to_next_m.push_back(forward[i][state_index]
+  //      + transition_c[state_index][idx_next_m]
+  //      + emission_c[idx_next_m][base2int(sequence[i+1])]
+  //      + backward[i+1][idx_next_m]);
+  //    i_to_curr_i.push_back(forward[i][state_index]
+  //      + transition_c[state_index][idx_curr_i]
+  //      + emission_c[idx_curr_i][base2int(sequence[i+1])]
+  //      + backward[i+1][idx_curr_i]);
+  //    if (state_index < model_len * 2 - 1)
+  //      // I_L-1 does not have next D
+  //      i_to_next_d.push_back(forward[i][state_index]
+  //        + transition_c[state_index][idx_next_d]
+  //        + emission_c[idx_next_d][base2int(sequence[i+1])]
+  //        + backward[i+1][idx_next_d]);
+  //  }
+  //  score.push_back(exp(smithlab::log_sum_log_vec(i_to_next_m,
+  //      i_to_next_m.size()) - posterior_p
+  //      - transition_c[state_index][idx_next_m])
+  //    - expected_state_count);
+  //  score.push_back(exp(smithlab::log_sum_log_vec(i_to_curr_i,
+  //      i_to_curr_i.size()) - posterior_p
+  //      - transition_c[state_index][idx_curr_i])
+  //    - expected_state_count);
+  //  if (state_index < model_len * 2 - 1)
+  //    score.push_back(exp(smithlab::log_sum_log_vec(i_to_next_d,
+  //        i_to_next_d.size()) - posterior_p
+  //        - transition_c[state_index][idx_next_d])
+  //      - expected_state_count);
+  //}
 }
 
 void

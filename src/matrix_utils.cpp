@@ -30,7 +30,7 @@ using std::accumulate;
 const double LOG_ZERO = -1e20;
 
 void
-normalize_vec_inplace(vector<double> &v, const bool logged = true) {
+normalize_vec_inplace(vector<double> &v, const bool logged) {
   // potentially needed to add another parameter for the scaling factor,
   // since not in all cases is the vector required to be normalized to
   // the sum of 1.

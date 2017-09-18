@@ -318,6 +318,7 @@ main (int argc, const char **argv) {
     bool VERBOSE = false;
     bool DEBUG = false;
     bool USE_HEU = false;
+    bool NOT_TRAIN_TRUNC = false;
     double lambda = 0.0;
     string outf;
 
@@ -328,6 +329,8 @@ main (int argc, const char **argv) {
     opt_parse.add_opt("lambda", 'l',
         "Model length adjusting parameter. Default: 0", false, lambda);
     opt_parse.add_opt("heuristic", 'u', "Heuristic mode.", false, USE_HEU);
+    opt_parse.add_opt("no-trunc", 'n', "Do not train truncation probabilities."
+        , false, NOT_TRAIN_TRUNC);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("deubg", 'd', "Print debug information.", false, DEBUG);
     vector<string> leftover_args;
@@ -460,6 +463,10 @@ main (int argc, const char **argv) {
       log_transform_vec(prior);
       prior[3] = get_3prime_truncation_prior(model_len, idx);
       row = combine_normalize(row, prior, true);
+      if (NOT_TRAIN_TRUNC) {
+        row[3] = prior[3];
+        normalize_vec_inplace(row);
+      }
       transition[curr_m.index(model_len)][next_m.index(model_len)] = row[0];
       transition[curr_m.index(model_len)][curr_i.index(model_len)] = row[1];
       transition[curr_m.index(model_len)][next_d.index(model_len)] = row[2];
@@ -507,6 +514,10 @@ main (int argc, const char **argv) {
     log_transform_vec(prior);
     prior.back() = get_3prime_truncation_prior(model_len, idx);
     row = combine_normalize(row, prior, true);
+      if (NOT_TRAIN_TRUNC) {
+        row.back() = prior.back();
+        normalize_vec_inplace(row);
+      }
     transition[curr_m.index(model_len)][next_m.index(model_len)] = row[0];
     transition[curr_m.index(model_len)][curr_i.index(model_len)] = row[1];
     transition[curr_m.index(model_len)][right_end.index(model_len)] = row[2];
@@ -547,9 +558,13 @@ main (int argc, const char **argv) {
     transition[left_end.index(model_len)] =
       normalize_vec(transition[left_end.index(model_len)], true);
     for (size_t i = 1; i <= model_len; ++i) {
-      transition[left_end.index(model_len)][i] = 
-        log_sum_log(transition[left_end.index(model_len)][i],
-            get_5prime_truncation_prior(model_len, i));
+      if (NOT_TRAIN_TRUNC)
+        transition[left_end.index(model_len)][i] =
+          get_5prime_truncation_prior(model_len, i);
+      else
+        transition[left_end.index(model_len)][i] = 
+          log_sum_log(transition[left_end.index(model_len)][i],
+              get_5prime_truncation_prior(model_len, i));
     }
     transition[left_end.index(model_len)] =
       normalize_vec(transition[left_end.index(model_len)], true);

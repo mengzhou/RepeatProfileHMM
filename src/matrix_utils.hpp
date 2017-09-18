@@ -28,7 +28,7 @@ typedef std::vector<std::vector<double> > matrix;
 extern const double LOG_ZERO;
 
 void
-normalize_vec_inplace(std::vector<double> &v, const bool logged);
+normalize_vec_inplace(std::vector<double> &v, const bool logged=true);
 
 double
 log_sum_log(const double p, const double q);

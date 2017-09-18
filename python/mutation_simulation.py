@@ -82,13 +82,19 @@ class mutations:
 
     return tandems
 
-  def trunc_len(self, seq_length):
+  def trunc_len_beta(self, seq_length):
     ALPHA = 3
     BETA = (1-self.trunc_p)/self.trunc_p*ALPHA
     MIN = 0
     MAX = int(seq_length*0.4)
     trunc_len = int(\
       numpy.round(numpy.random.beta(ALPHA, BETA)*(MAX-MIN)+MIN))
+
+    return trunc_len
+
+  def trunc_len_geo(self, seq_length, lower=1):
+    length = numpy.random.geometric(self.trunc_p)
+    trunc_len = min(seq_length - length % seq_length + 1, seq_length - lower)
 
     return trunc_len
 
@@ -209,6 +215,7 @@ class repeat_copy:
     self.actual_seq = mutated
 
   def _apply_truncation(self, trunc_len):
+    trunc_len = int(1.0 * trunc_len / len(self.init_seq) * len(self.actual_seq))
     self.actual_seq = self.actual_seq[trunc_len:]
 
 class repeat_family:
@@ -247,7 +254,7 @@ class repeat_family:
       if no_trunc:
         trunc_len = 0
       else:
-        trunc_len = self.mutator.trunc_len(len(self.consensus))
+        trunc_len = self.mutator.trunc_len_beta(len(self.consensus))
       rep_id = i
       new = repeat_copy(self._get_copy_name(i+1), self.consensus,\
           rep_id, subs, indels, tandems, trunc_len)

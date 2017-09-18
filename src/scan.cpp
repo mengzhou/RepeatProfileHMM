@@ -121,6 +121,7 @@ identify_repeats(const ProfileHMM &hmm,
     const vector<size_t> &states,
     const string chr_name,
     const bool SENSE_STRAND,
+    const bool NO_LOG_ODDS,
     vector<GenomicRegion> &coordinates,
     vector<string> &state_bits) {
   // use bg_state = model_len, offset = 0 for collapsed matrix decoding;
@@ -148,7 +149,8 @@ identify_repeats(const ProfileHMM &hmm,
       // this is the score using reverse sequenc as normalization
       string obs_rev(obs.rbegin(), obs.rend());
       double score =
-        hmm.PosteriorProb(false, obs) - hmm.PosteriorProb(false, obs_rev);
+        hmm.PosteriorProb(!NO_LOG_ODDS, obs)
+          - hmm.PosteriorProb(!NO_LOG_ODDS, obs_rev);
       string name = "X";
       if (SENSE_STRAND) {
         GenomicRegion new_copy(chr_name, start,
@@ -205,7 +207,7 @@ main (int argc, const char **argv) {
     bool VERBOSE = false;
     bool DEBUG = false;
     bool NO_LOG_ODDS = false;
-    double z_cutoff = 1.0;
+    double Z_CUTOFF = 1.0;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
     //size_t seed = time(0) * getpid();
@@ -223,7 +225,7 @@ main (int argc, const char **argv) {
     opt_parse.add_opt("z-cutoff", 'z',
       "Z-score cutoff for occurrence identifiation. Default: 1.0;\
         setting to 0 will disable this functionality.",
-      false, z_cutoff);
+      false, Z_CUTOFF);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
@@ -239,7 +241,7 @@ main (int argc, const char **argv) {
       cerr << opt_parse.option_missing_message() << endl;
       return EXIT_FAILURE;
     }
-    if (z_cutoff < 0) {
+    if (Z_CUTOFF < 0) {
       cerr << "Z-score cutoff must be positive." << endl;
       return EXIT_FAILURE;
     }
@@ -292,23 +294,24 @@ main (int argc, const char **argv) {
           cerr << chr_name[i] << endl;
         hmm.PosteriorDecoding(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
         identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-          chr_name[i], true, coordinates, state_bits);
+          chr_name[i], true, NO_LOG_ODDS, coordinates, state_bits);
         
         revcomp_inplace(chr_seq[i]);
         hmm.ComplementBackground();
         hmm.PosteriorDecoding(false, false, !NO_LOG_ODDS, chr_seq[i], states);
         identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-          chr_name[i], false, coordinates, state_bits);
+          chr_name[i], false, NO_LOG_ODDS, coordinates, state_bits);
       }
-      if (z_cutoff - 0.0 > 1e-10) {
+      if (Z_CUTOFF - 0.0 > 1e-10) {
         if (VERBOSE)
           cerr << "[CALCULATING Z-SCORES]" << endl;
-        zscore_filter(coordinates, z_cutoff);
+        zscore_filter(coordinates, Z_CUTOFF);
       }
       for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
         i < coordinates.end(); ++i)
       {
-        out << *i << "\t" << state_bits[i-coordinates.begin()] << endl;
+        if (Z_CUTOFF - 0.0 < 1e-10 || i->get_score() > Z_CUTOFF)
+          out << *i << "\t" << state_bits[i-coordinates.begin()] << endl;
       }
     }
   }

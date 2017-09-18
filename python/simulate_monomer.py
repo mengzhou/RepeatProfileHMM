@@ -8,6 +8,19 @@ from optparse import OptionParser
 from utils import *
 from mutation_simulation import *
 
+def rand_padding(length=100):
+  """Generate random sequence at a given length.
+  """
+  alphabet = ["a", "g", "c", "t"]
+  cdf = (0.33, 0.54, 0.74, 1)
+  seq = ""
+  for x in xrange(length):
+    p = numpy.random.random()
+    nt = next(i[0] for i in enumerate(cdf) if i[1] > p)
+    seq = seq + alphabet[nt]
+
+  return seq
+
 def truncate_geo(p, lower, seq):
   """Truncate the input sequence from 5' end based on a geometric
   distribution.
@@ -86,7 +99,7 @@ def main():
     # fitting a gamma distribution for the number of monomer units of
     # L1Md_A3
     unit_counts.append(int(round(\
-      numpy.random.gamma(shape=9.4967591, scale=0.2188508))))
+      numpy.random.gamma(shape=9.4967591, scale=0.2188508)))+3)
 
   max_count = max(unit_counts)
   con_len = len(opt.con_seq)
@@ -110,10 +123,11 @@ def main():
       indels = mutator.indel(opt.age, con_len)
       tandems = {}
       if monomer_idx == count - 1:
-        trunc_len = mutator.trunc_len(con_len)
+        trunc_len = mutator.trunc_len_geo(con_len)
       else:
         trunc_len = 0
-      monomer_name = "%s_%d#M%d"%(opt.con_name, repeat_idx, monomer_idx)
+      monomer_name = "%s_%d%%%d#%d"%(opt.con_name, repeat_idx, 
+          count - monomer_idx, monomer_idx+1)
       monomer_unit = repeat_copy(monomer_name, opt.con_seq, repeat_idx,
           subs, indels, tandems, trunc_len)
       repeat_families[monomer_idx].copies[repeat_idx] = monomer_unit
@@ -140,7 +154,7 @@ def main():
           repeat_families[count-i-1].copies[repeat_idx].actual_seq
       # 5' truncation here
     joint_outf.write(">%s\n"%repeat_name)
-    joint_outf.write(text_wrap(repeat_seq))
+    joint_outf.write(text_wrap(rand_padding() + repeat_seq + rand_padding()))
 
   joint_outf.close()
   separate_outf.close()
