@@ -7,8 +7,7 @@ all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
 endif
 
-PROGS = test construct scan multiscan fisher fit
-#PROGS = fit
+PROGS = align
 
 CXX = g++
 CXXFLAGS = -Wall -fmessage-length=50 -std=c++11
@@ -47,10 +46,7 @@ install: $(PROGS)
 	@install -m 755 $(PROGS) $(PROGRAM_ROOT)/bin
 
 $(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-	OptionParser.o GenomicRegion.o)\
-       	matrix_utils.o ProfileHMM.o
-
-multiscan test: MultiProfileHMM.o
+	OptionParser.o)
 
 %.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $< $(INCLUDEARGS)

@@ -20,15 +20,22 @@
 #
 
 PROGRAM_ROOT = $(shell pwd)
+app_subdirs=src utils
 
 all:
-	@make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) OPT=1
+	@for i in $(app_subdirs); do\
+	  make -C $${i} PROGRAM_ROOT=$(PROGRAM_ROOT) OPT=1; \
+	 done;
 
 install:
-	@make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) OPT=1 install
+	@for i in $(app_subdirs); do\
+	  make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) OPT=1 install; \
+	 done;
 
 clean:
-	@make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) clean
+	@for i in $(app_subdirs); do\
+	  make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) clean; \
+	 done;
 .PHONY: clean
 
 distclean: clean

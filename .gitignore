@@ -24,6 +24,7 @@ scan
 multiscan
 fisher
 fit
+align
 
 # no other testing stuff
 tmp*
