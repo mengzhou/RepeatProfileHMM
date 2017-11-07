@@ -158,8 +158,8 @@ identify_repeats(const ProfileHMM &hmm,
         coordinates.push_back(new_copy);
       }
       else {
-        GenomicRegion new_copy(chr_name, chr_len - end + 1,
-          chr_len - start + 1, name, score, '-');
+        GenomicRegion new_copy(chr_name, chr_len - end,
+          chr_len - start, name, score, '-');
         coordinates.push_back(new_copy);
       }
 
