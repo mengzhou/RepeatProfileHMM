@@ -34,24 +34,24 @@ using std::istringstream;
 using std::ostream;
 using std::ofstream;
 
-size_t
-g_align_hamming(const string &seq1, const string &seq2) {
+double
+g_align_hamming(const string &seq1, const string &seq2,
+    const double GAP, const double MM) {
   const size_t L1 = seq1.size();
   const size_t L2 = seq2.size();
-  vector<size_t> prev(L1+1, 0);
-  vector<size_t> curr(L1+1, 0);
-  //gap = 1;
+  vector<double> prev(L1+1, 0.0);
+  vector<double> curr(L1+1, 0.0);
 
   for (size_t i=1; i<L1+1; ++i) {
-    prev[i] = i;
+    prev[i] = 1.0*i;
   }
   for (size_t j=1; j<L2+1; ++j) {
     curr[0] = j;
     for (size_t i=1; i<L1+1; ++i) {
-      const size_t left = curr[i-1] + 1;
-      const size_t up = prev[i] + 1;
-      const size_t w_gap = left < up ? left : up;
-      const size_t wo_gap = prev[i-1] + (seq1[i-1] != seq2[j-1]);
+      const double left = curr[i-1] + GAP;
+      const double up = prev[i] + GAP;
+      const double w_gap = left < up ? left : up;
+      const double wo_gap = prev[i-1] + MM*(seq1[i-1] != seq2[j-1]);
       curr[i] = wo_gap < w_gap ? wo_gap : w_gap;
     }
     prev = curr;
@@ -62,6 +62,8 @@ g_align_hamming(const string &seq1, const string &seq2) {
 int
 main(int argc, const char **argv) {
   try {
+    double GAP = 1.0;
+    double MM = 1.0;
     bool VERBOSE = false;
     string in_file, out_file;
 
@@ -71,6 +73,10 @@ main(int argc, const char **argv) {
 
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
       false, out_file);
+    opt_parse.add_opt("gap", 'g', "Penalty for gap. Default: 1.0",
+      false, GAP);
+    opt_parse.add_opt("mismatch", 'm', "Penalty for mismatch. Default: 1.0",
+      false, MM);
     opt_parse.add_opt("verbose", 'v',
       "Verbose mode. Only use this for interactive enviroment.", false, VERBOSE);
 
@@ -102,7 +108,7 @@ main(int argc, const char **argv) {
           + in_file);
 
     const size_t total = seq_name.size()*(seq_name.size()-1)/2;
-    vector<vector<size_t> > sc(seq_name.size(), vector<size_t>(seq_name.size(), 0));
+    vector<vector<double> > sc(seq_name.size(), vector<double>(seq_name.size(), 0.0));
     size_t counter = 0;
     for (size_t i = 0; i < seq_name.size(); ++i)
       out << "\t" << seq_name[i];
@@ -111,7 +117,7 @@ main(int argc, const char **argv) {
       out << seq_name[i];
       for (size_t j = 0; j < seq_seq.size(); ++j) {
         if (j>i) {
-          sc[i][j] = g_align_hamming(seq_seq[i], seq_seq[j]);
+          sc[i][j] = g_align_hamming(seq_seq[i], seq_seq[j], GAP, MM);
           ++counter;
           if (VERBOSE && counter % 100 == 1) {
             cerr << "\r[";

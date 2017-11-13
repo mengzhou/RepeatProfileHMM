@@ -20,7 +20,7 @@
 #
 
 PROGRAM_ROOT = $(shell pwd)
-app_subdirs=src utils
+app_subdirs = src utils
 
 all:
 	@for i in $(app_subdirs); do\
@@ -29,7 +29,7 @@ all:
 
 install:
 	@for i in $(app_subdirs); do\
-	  make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) OPT=1 install; \
+	  make -C $$i PROGRAM_ROOT=$(PROGRAM_ROOT) OPT=1 install; \
 	 done;
 
 clean:

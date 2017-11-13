@@ -126,6 +126,7 @@ identify_repeats(const ProfileHMM &hmm,
     vector<string> &state_bits) {
   // use bg_state = model_len, offset = 0 for collapsed matrix decoding;
   // use bg_state = model_len+1, offset = 1 for complete matrix decoding.
+  const size_t INTERNAL_LOOP_LEN = 10;
   const size_t model_len = hmm.Length();
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
@@ -139,7 +140,7 @@ identify_repeats(const ProfileHMM &hmm,
       start = j - states.begin();
     else if ((*i < bg_state && *j == bg_state)
         || (*i < bg_state && j == states.end())
-        || (*i < bg_state && *j < bg_state && *i > *j))
+        || (*i < bg_state && *j < bg_state && *i > *j + INTERNAL_LOOP_LEN))
       end = j - states.begin();
     if (end > start) {
       const string obs = chr_seq.substr(start, end - start);
