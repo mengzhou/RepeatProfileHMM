@@ -37,13 +37,13 @@ size_t
 baseint2stateint(const size_t &baseint,
     const bool marked) {
   if (marked && baseint < 4)
-    return 0;
+    return 0; // match
   else if (marked && baseint == 4)
-    return 2;
+    return 2; // deletion
   else if (marked && baseint == 5)
     return 3; // mark at outside of alignment, truncation
   else if (!marked && baseint < 4)
-    return 1;
+    return 1; // insertion
   else
     return 4; // gap in not marked column; this is not supposed to happen
 }
@@ -499,6 +499,8 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
   for (size_t pos = 1; pos < seq_len + 1; ++pos) {
     if (VERBOSE && pos % 10000 == 0)
       cerr << "\tPROCESSED " << 100 * pos / seq_len << "%" << endl;
+    // iterations must follow a specific order, such that internal loops
+    // can be processed properly.
     vector<size_t> itr_order;
     for (size_t idx = 1; idx < total_size - 1; ++idx)
       if (idx != index_d(1) && idx != index_d(model_len))
@@ -519,15 +521,22 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
             j < i->second.end(); ++j) {
           list.push_back(forward[pos-1][*j] + transition[*j][state_idx]);
         }
-        if (USE_LOG_ODDS)
-          forward[pos][state_idx] =
-            smithlab::log_sum_log_vec(list, list.size())
-            + emission[state_idx][curr_baseint]
-            - emission[index_i(0)][curr_baseint];
-        else
-          forward[pos][state_idx] =
-            smithlab::log_sum_log_vec(list, list.size())
-            + emission[state_idx][curr_baseint];
+        double emission_score = LOG_ZERO;
+        if (curr_baseint < 4) {
+          // ACGT
+          emission_score = emission[state_idx][curr_baseint];
+          if (USE_LOG_ODDS)
+            emission_score = emission_score - emission[index_i(0)][curr_baseint];
+        }
+        else {
+          // an N is seen
+          if (state_can_emit_n(state_idx))
+            emission_score = 0.0;
+          else
+            emission_score = LOG_ZERO;
+        }
+        forward[pos][state_idx] = smithlab::log_sum_log_vec(list, list.size())
+          + emission_score;
       }
       else {
         for (vector<size_t>::const_iterator j = i->second.begin();
@@ -577,15 +586,24 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
             j < i->second.rend(); ++j) {
           if (state_can_emit(*j)) {
             // *j is an M/I state with viable emission
-            if (USE_LOG_ODDS)
-              list.push_back(backward[pos+1][*j]
-                  + transition[state_idx][*j]
-                  + emission[*j][next_baseint]
-                  - emission[index_i(0)][next_baseint]);
-            else
-              list.push_back(backward[pos+1][*j]
-                  + transition[state_idx][*j]
-                  + emission[*j][next_baseint]);
+            const double transition_score = backward[pos+1][*j] 
+              + transition[state_idx][*j];
+            double emission_score = LOG_ZERO;
+            if (next_baseint < 4) {
+              // ACGT
+              emission_score = emission[*j][next_baseint];
+              if (USE_LOG_ODDS)
+                emission_score = emission_score 
+                  - emission[index_i(0)][next_baseint];
+            }
+            else {
+              // an N is seen
+              if (state_can_emit_n(*j))
+                emission_score = 0.0;
+              else
+                emission_score = LOG_ZERO;
+            }
+            list.push_back(transition_score + emission_score);
           }
           else {
             // *j is a D state without viable emission
@@ -1073,6 +1091,11 @@ ProfileHMM::state_can_emit(const size_t idx) const {
   return idx >= index_m(1) && idx < index_d(1);
 }
 
+bool
+ProfileHMM::state_can_emit_n(const size_t idx) const {
+  return idx >= index_i(0) && idx < index_d(1);
+}
+
 void
 ProfileHMM::Print(ostream& out, const bool HUM_READABLE) const {
   out << "#Model length: " << model_len << endl;
@@ -1464,7 +1487,8 @@ ProfileHMM::FisherScoreVector(const string &sequence,
     for (size_t i = 0; i < sequence.length()-1; ++i) {
       // posterior emission count per nt per state
       const int nt_idx = base2int(sequence[i]);
-      nt_count[nt_idx].push_back(state_count[i]);
+      if (nt_idx < 4)
+        nt_count[nt_idx].push_back(state_count[i]);
       // posterior transition count per state of interest
       //if (state_index < model_len - 1) {
       //  // M_1 to M_L-1
