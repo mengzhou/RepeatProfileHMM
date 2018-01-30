@@ -170,6 +170,9 @@ private:
   bool
   state_can_emit(const size_t idx) const;
 
+  bool
+  state_can_emit_n(const size_t idx) const;
+
   void
   print_transition(std::ostream& out, const bool HUM_READABLE) const;
   
