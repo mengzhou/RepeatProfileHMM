@@ -18,9 +18,23 @@
 #ifndef MULTIPHMM_HPP
 #define MULTIPHMM_HPP
 
+#include <unordered_map>
+
 #include "ProfileHMM.hpp"
 
 typedef std::pair<ProfileHMM*, size_t> multihmm_state;
+
+namespace std {
+  template <>
+  struct hash<multihmm_state> : public unary_function<multihmm_state, size_t> {
+    size_t operator()(const multihmm_state& multi_state) const {
+      const size_t h1(std::hash<std::string>{}(multi_state.first->Name()));
+      const size_t h2(std::hash<size_t>{}(multi_state.first->Length()));
+      // just some simple combination of the hash values
+      return h1 ^ (h2 << 2) ^ (multi_state.second << 1);
+    }
+  };
+}
 
 class MultiProfileHMM {
 public:
@@ -87,8 +101,8 @@ private:
   size_t num_states;
   size_t num_columns; // sum of individual model lengths
 
-  std::map<multihmm_state, std::vector<multihmm_state> > transitions_to;
-  std::map<multihmm_state, std::vector<multihmm_state> > transitions_from;
+  std::unordered_map<multihmm_state, std::vector<multihmm_state> > transitions_to;
+  std::unordered_map<multihmm_state, std::vector<multihmm_state> > transitions_from;
   ProfileHMM dummy_this;
 };
 #endif

@@ -18,8 +18,8 @@
 #ifndef PHMM_HPP
 #define PHMM_HPP
 
+#include <unordered_map>
 #include <gsl/gsl_randist.h>
-#include <map>
 
 #include "smithlab_utils.hpp"
 #include "matrix_utils.hpp"
@@ -197,8 +197,8 @@ private:
   size_t model_len;
   size_t total_size;
   std::string name;
-  std::map<size_t, std::vector<size_t> > transitions_to;
-  std::map<size_t, std::vector<size_t> > transitions_from;
+  std::unordered_map<size_t, std::vector<size_t> > transitions_to;
+  std::unordered_map<size_t, std::vector<size_t> > transitions_from;
   matrix transition, transition_c;
   matrix emission, emission_c;
   std::vector<double> initial_prob;

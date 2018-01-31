@@ -31,7 +31,7 @@ using std::cout;
 using std::cerr;
 using std::ostream;
 using std::cerr;
-using std::map;
+using std::unordered_map;
 
 size_t
 baseint2stateint(const size_t &baseint,
@@ -510,7 +510,7 @@ ProfileHMM::forward_algorithm(const bool VERBOSE,
     for (vector<size_t>::const_iterator idx = itr_order.begin();
       idx < itr_order.end(); ++idx) {
       const size_t state_idx = *idx;
-      const map<size_t, vector<size_t> >::const_iterator i = 
+      const unordered_map<size_t, vector<size_t> >::const_iterator i = 
         transitions_from.find(state_idx);
       vector<double> list;
       // use observation[pos-1] because in this vector the position
@@ -577,7 +577,7 @@ ProfileHMM::backward_algorithm(const bool VERBOSE,
     for (vector<signed long>::const_iterator idx = itr_order.begin();
         idx < itr_order.end(); ++idx) {
       const signed long state_idx = *idx;
-      const map<size_t, vector<size_t> >::const_iterator i = 
+      const unordered_map<size_t, vector<size_t> >::const_iterator i = 
         transitions_to.find(static_cast<size_t>(state_idx));
       if (i != transitions_to.end()) {
         vector<double> list;
@@ -731,7 +731,7 @@ ProfileHMM::Train(const bool VERBOSE,
 
     // Maximization
     // transition
-    for (map<size_t, vector<size_t> >::const_iterator from
+    for (unordered_map<size_t, vector<size_t> >::const_iterator from
         = transitions_to.begin();
         from != transitions_to.end(); ++from) {
       vector<double> list;
@@ -774,7 +774,7 @@ ProfileHMM::train_expectation(const bool VERBOSE,
   const size_t seq_len = observation.length();
   const double ll = posterior_prob(forward);
   // transition
-  for (map<size_t, vector<size_t> >::const_iterator trans =
+  for (unordered_map<size_t, vector<size_t> >::const_iterator trans =
       transitions_to.begin(); trans != transitions_to.end(); ++trans) {
     const size_t i = trans->first;
     for (vector<size_t>::const_iterator j = trans->second.begin();
@@ -989,7 +989,7 @@ ProfileHMM::posterior_prob(const matrix &forward) const {
 void
 ProfileHMM::pseudo_count(void) {
   const double PSEUDOCOUNT = -5;
-  for (map<size_t, vector<size_t> >::const_iterator from =
+  for (unordered_map<size_t, vector<size_t> >::const_iterator from =
       transitions_to.begin();
       from != transitions_to.end(); ++from) {
     for (vector<size_t>::const_iterator to = from->second.begin();

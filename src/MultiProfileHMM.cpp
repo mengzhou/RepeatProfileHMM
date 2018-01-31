@@ -15,7 +15,6 @@
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
 #include <vector>
 #include <utility>
 #include <string>
@@ -25,7 +24,7 @@
 using std::vector;
 using std::pair;
 using std::make_pair;
-using std::map;
+using std::unordered_map;
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -57,15 +56,15 @@ MultiProfileHMM::Print(void) const {
 void
 MultiProfileHMM::get_viable_transitions_to(void) {
   transitions_to.clear();
-  pair<ProfileHMM*, size_t> begin = make_pair(&dummy_this, 0);
-  pair<ProfileHMM*, size_t> end = make_pair(&dummy_this, 1);
+  const multihmm_state begin = make_pair(&dummy_this, 0);
+  const multihmm_state end = make_pair(&dummy_this, 1);
   transitions_to[begin] = vector<multihmm_state>();
   for (vector<ProfileHMM*>::const_iterator i = models.begin();
       i < models.end(); ++i) {
     // B_0 to B of each model
     transitions_to[begin].push_back(make_pair(*i, (**i).index_m(0)));
     // E of each model to E_0
-    pair<ProfileHMM*, size_t> e_i = make_pair(*i, (**i).total_size);
+    multihmm_state e_i = make_pair(*i, (**i).total_size);
     transitions_to[e_i] = vector<multihmm_state>(1, end);
   }
   // E_0 back to B_0
@@ -75,8 +74,8 @@ MultiProfileHMM::get_viable_transitions_to(void) {
 void
 MultiProfileHMM::get_viable_transitions_from(void) {
   transitions_from.clear();
-  pair<ProfileHMM*, size_t> begin = make_pair(&dummy_this, 0);
-  pair<ProfileHMM*, size_t> end = make_pair(&dummy_this, 1);
+  const multihmm_state begin = make_pair(&dummy_this, 0);
+  const multihmm_state end = make_pair(&dummy_this, 1);
   // E_0 to B_0
   transitions_from[begin] = vector<multihmm_state>(1, end);
   transitions_to[end] = vector<multihmm_state>();
@@ -85,7 +84,7 @@ MultiProfileHMM::get_viable_transitions_from(void) {
     // E of each model to E_0
     transitions_from[end].push_back(make_pair(*i, (**i).total_size));
     // B_0 to B of each model
-    pair<ProfileHMM*, size_t> b_i = make_pair(*i, (**i).index_m(0));
+    multihmm_state b_i = make_pair(*i, (**i).index_m(0));
     transitions_from[b_i] = vector<multihmm_state>(1, begin);
   }
 }
@@ -163,7 +162,7 @@ MultiProfileHMM::forward_algorithm(const bool VERBOSE,
       for (size_t state_idx = 1;
           state_idx < (**model).total_size - 1; ++state_idx) {
         // states with emission: M/I
-        const map<size_t, vector<size_t> >::const_iterator i = 
+        const unordered_map<size_t, vector<size_t> >::const_iterator i = 
           (**model).transitions_from.find(state_idx);
         if (i != (**model).transitions_from.end()) {
           vector<double> list;
@@ -274,7 +273,7 @@ MultiProfileHMM::backward_algorithm(const bool VERBOSE,
         model < models.end(); ++model) {
       const size_t idx_d_1 = (**model).index_d(1);
       const size_t idx_i_0 = (**model).index_i(0);
-      const map<size_t, vector<size_t> >::const_iterator i = 
+      const unordered_map<size_t, vector<size_t> >::const_iterator i = 
         (**model).transitions_to.find(idx_d_1);
       vector<double> list;
       // D_1^i to all M_j^i
@@ -332,7 +331,7 @@ MultiProfileHMM::backward_algorithm(const bool VERBOSE,
         model < models.end(); ++model) {
       for (signed long state_idx = (**model).total_size - 1;
           state_idx >= 0; --state_idx) {
-        const map<size_t, vector<size_t> >::const_iterator i = 
+        const unordered_map<size_t, vector<size_t> >::const_iterator i = 
           (**model).transitions_to.find(state_idx);
         // skip states that have been calculated
         if (i != (**model).transitions_to.end()
