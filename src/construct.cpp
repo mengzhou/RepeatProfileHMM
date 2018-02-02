@@ -264,6 +264,21 @@ find_marked_cols_heu(vector<bool> &marked,
   }
 }
 
+void
+find_marked_cols_manual(vector<bool> &marked,
+    const vector<string> &names, const vector<string> &seqs) {
+  vector<string>::const_iterator ref = std::find(names.begin(),
+      names.end(), "consensus");
+  if (ref == names.end()) {
+    throw SMITHLABException("The consensus is not found in input alignment!");
+  }
+  const size_t ref_idx = ref - names.begin();
+  const size_t seq_len = marked.size();
+  for (size_t col = 0; col < seq_len; ++col) {
+    if (base2int(seqs[ref_idx][col]) < 4) marked[col] = true;
+  }
+}
+
 string
 get_consensus(const vector<bool> &marked,
     const vector<string> &seqs) {
@@ -318,6 +333,7 @@ main (int argc, const char **argv) {
     bool VERBOSE = false;
     bool DEBUG = false;
     bool USE_HEU = false;
+    bool MANUAL = false;
     bool NOT_TRAIN_TRUNC = false;
     double lambda = 0.0;
     string outf;
@@ -329,6 +345,9 @@ main (int argc, const char **argv) {
     opt_parse.add_opt("lambda", 'l',
         "Model length adjusting parameter. Default: 0", false, lambda);
     opt_parse.add_opt("heuristic", 'u', "Heuristic mode.", false, USE_HEU);
+    opt_parse.add_opt("manual", 'm'
+        , "Manual mode. The input must have a sequence named as consensus."
+        , false, MANUAL);
     opt_parse.add_opt("no-trunc", 'n', "Do not train truncation probabilities."
         , false, NOT_TRAIN_TRUNC);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
@@ -345,6 +364,10 @@ main (int argc, const char **argv) {
     }
     if (opt_parse.about_requested() || leftover_args.size() != 1) {
       cout << opt_parse.about_message() << endl;
+      return EXIT_SUCCESS;
+    }
+    if (USE_HEU && MANUAL) {
+      cout << "Heuristic mode (-u) is not compatible with manual mode (-m)!.";
       return EXIT_SUCCESS;
     }
     const string inf = leftover_args.front();
@@ -368,6 +391,8 @@ main (int argc, const char **argv) {
     set_emission_prior(emis_prior);
     if (USE_HEU)
       find_marked_cols_heu(marked_cols, seqs);
+    else if (MANUAL)
+      find_marked_cols_manual(marked_cols, names, seqs);
     else
       find_marked_cols_map(VERBOSE,
           marked_cols, seqs, tran_prior, emis_prior, lambda);
@@ -409,8 +434,9 @@ main (int argc, const char **argv) {
           1, true);
       transition[left_end.index(model_len)][curr_state.index(model_len)] =
         transition[left_end.index(model_len)][curr_state.index(model_len)] + 1;
-      emission[curr_state.index(model_len)][curr_state.baseint] =
-        emission[curr_state.index(model_len)][curr_state.baseint] + 1;
+      if (curr_state.baseint < 4)
+        emission[curr_state.index(model_len)][curr_state.baseint] =
+          emission[curr_state.index(model_len)][curr_state.baseint] + 1;
 
       vector<state> seq_state(1, curr_state);
       size_t col_idx = 1;
@@ -427,8 +453,9 @@ main (int argc, const char **argv) {
         transition[(*j).index(model_len)][(*k).index(model_len)] = 
           transition[(*j).index(model_len)][(*k).index(model_len)] + 1;
         if ((*k).stateint < 2)
-          emission[(*k).index(model_len)][(*k).baseint] =
-            emission[(*k).index(model_len)][(*k).baseint] + 1;
+          if ((*k).baseint < 4)
+            emission[(*k).index(model_len)][(*k).baseint] =
+              emission[(*k).index(model_len)][(*k).baseint] + 1;
       }
 
       // 3' truncation

@@ -127,7 +127,7 @@ ProfileHMM::ProfileHMM(const matrix &t,
   get_viable_transitions_to();
   get_viable_transitions_from();
   name = "NULL";
-  collapse_states();
+  //collapse_states();
 }
 
 ProfileHMM::ProfileHMM(const string inf) {
@@ -135,7 +135,7 @@ ProfileHMM::ProfileHMM(const string inf) {
   get_viable_transitions_to();
   get_viable_transitions_from();
   name = inf.substr(0, inf.find_last_of('.'));
-  collapse_states();
+  //collapse_states();
 }
 
 ProfileHMM::ProfileHMM(const ProfileHMM &other) {
@@ -763,7 +763,7 @@ ProfileHMM::Train(const bool VERBOSE,
   //    smithlab::log_sum_log_vec(e_emiss[i], e_emiss[i].size());
   //  cout << i << "\t" << exp(sum) << endl;
   //}
-  collapse_states();
+  //collapse_states();
 }
 
 void
@@ -1112,8 +1112,8 @@ ProfileHMM::Consensus(void) const {
   vector<char> bases;
   for (size_t i = 0; i < model_len; ++i) {
     const vector<double>::const_iterator max_itr =
-      std::max_element(emission_c[i].begin(), emission_c[i].end());
-    bases.push_back(int2base(max_itr - emission_c[i].begin()));
+      std::max_element(emission[i].begin(), emission[i].end());
+    bases.push_back(int2base(max_itr - emission[i].begin()));
   }
   const string consensus(bases.begin(), bases.end());
   return consensus;
