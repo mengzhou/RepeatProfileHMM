@@ -106,8 +106,9 @@ get_state_bits(const vector<size_t> &copy_states,
   string bits(width, '0');
   for (vector<size_t>::const_iterator i = copy_states.begin();
       i < copy_states.end(); ++i) {
+    assert(*i >= offset);
     const size_t idx = *i - offset;
-    if (idx >= 0 && idx < width)
+    if (idx < width)
       bits[idx] = '1';
   }
   return bits;

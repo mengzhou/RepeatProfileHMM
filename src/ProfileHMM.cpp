@@ -1,4 +1,5 @@
-/*    Copyright (C) 2016 University of Southern California and
+/*    ProfileHMM: implemenation of profile-HMM with internal loop
+ *    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
  *
  *    This program is free software: you can redistribute it and/or modify

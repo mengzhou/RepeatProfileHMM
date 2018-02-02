@@ -1,4 +1,6 @@
-/*    Copyright (C) 2016 University of Southern California and
+/*    MultiProfileHMM: class implementation of combining multiple
+ *    profile-HMMs.
+ *    Copyright (C) 2016 University of Southern California and
  *                       Meng Zhou
  *
  *    This program is free software: you can redistribute it and/or modify
