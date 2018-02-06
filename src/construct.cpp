@@ -88,9 +88,9 @@ set_transition_prior(matrix &tran_prior) {
   // M to M, I, D_i, D_1
   tran_prior.push_back(vector<double>({0.8, 0.1, 0.1, 0.0}));
   // I to M, I, D_i, D_1
-  tran_prior.push_back(vector<double>({0.2, 0.7, 0.1, 0.0}));
+  tran_prior.push_back(vector<double>({0.5, 0.4, 0.1, 0.0}));
   // D_i to M, I, D_i, D_1
-  tran_prior.push_back(vector<double>({0.2, 0.1, 0.7, 0.0}));
+  tran_prior.push_back(vector<double>({0.5, 0.1, 0.4, 0.0}));
   // D_1 to M, I, D_i, D_1
   tran_prior.push_back(vector<double>({1.0, 0.0, 0.0, 0.0}));
 }

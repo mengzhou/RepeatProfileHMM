@@ -24,10 +24,10 @@
 #include <fstream>
 #include <sstream>
 #include <random>
-//#include <gsl/gsl_randist.h>
 #include <unordered_map>
 #include <sys/types.h>
 #include <unistd.h>
+#include <omp.h>
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
@@ -46,56 +46,6 @@ using std::cerr;
 using std::endl;
 
 typedef unordered_map<string, string> chrom_file_map;
-
-void
-load_hmm_parameter(const string &input_file,
-    matrix &transition,
-    matrix &emission,
-    size_t &model_len) {
-  /* Format of input file:
-   # some header
-   transition_value1 transition_value2 ...
-   ...
-   //
-   emission_value1 ...
-   ...
-   //
-  */
-  ifstream in(input_file.c_str());
-  // skip header with #
-  string line;
-  getline(in, line);
-  while((line.substr(0,1)) == "#"){
-    getline(in, line);
-  }
-
-  assert(transition.empty());
-  double val;
-  while (!line.empty() && line.compare("//")) {
-    transition.push_back(vector<double>());
-    istringstream iss(line);
-    while (iss >> val) {
-      (*(transition.end()-1)).push_back(val);
-    }
-    getline(in, line);
-  }
-  model_len = (transition.size() - 2) / 3;
-  assert(emission.empty());
-  getline(in, line);
-  while (!line.empty() && line.compare("//")) {
-    emission.push_back(vector<double>());
-    istringstream iss(line);
-    while (iss >> val) {
-      (*(emission.end()-1)).push_back(val);
-    }
-    getline(in, line);
-  }
-
-  const size_t total_size = model_len * 3 + 2;
-  assert(transition.size() == total_size);
-  assert((*transition.begin()).size() == total_size);
-  assert(emission.size() == total_size);
-}
 
 string
 get_state_bits(const vector<size_t> &copy_states,
@@ -212,7 +162,7 @@ main (int argc, const char **argv) {
     double Z_CUTOFF = 1.0;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
-    //size_t seed = time(0) * getpid();
+    size_t NUM_THREAD = 1;
 
     OptionParser opt_parse(strip_path(argv[0]), "Program for finding repeats.",
         "-c <chroms> <profile-HMM params file>");
@@ -228,6 +178,8 @@ main (int argc, const char **argv) {
       "Z-score cutoff for occurrence identifiation. Default: 1.0;\
         setting to 0 will disable this functionality.",
       false, Z_CUTOFF);
+    opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
+        Default: 1.", false, NUM_THREAD);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
@@ -248,15 +200,12 @@ main (int argc, const char **argv) {
       return EXIT_FAILURE;
     }
     in_par = leftover_args.front();
+    omp_set_dynamic(0);
+    omp_set_num_threads(NUM_THREAD);
 
     std::ofstream of;
     if (!out_file.empty()) of.open(out_file.c_str());
     std::ostream out(out_file.empty() ? std::cout.rdbuf() : of.rdbuf());
-
-    // currently not used. in the furture needed for handling N in the genome
-    //gsl_rng *rng;
-    //rng = gsl_rng_alloc(gsl_rng_default);
-    //gsl_rng_set(rng, seed);
 
     if (VERBOSE)
       cerr << "[LOADING HMM]" << endl;
@@ -268,53 +217,71 @@ main (int argc, const char **argv) {
       cerr << "[LOADING GENOME]" << endl;
     chrom_file_map chrom_files;
     identify_chromosomes(chrom_file, fasta_suffix, chrom_files);
-    if (VERBOSE)
-      cerr << "\tCHROMS_FOUND=" << chrom_files.size() << endl;
-
-    size_t file_counter = 1;
+    vector<string> chr_name, chr_seq;
     for (chrom_file_map::const_iterator chrom = chrom_files.begin();
         chrom != chrom_files.end(); ++chrom) {
-      vector<string> chr_name, chr_seq;
       read_fasta_file(chrom->second, chr_name, chr_seq);
       if (chr_name.size() < 1)
         throw SMITHLABException("could not find any sequence in: "
             + chrom->second);
+    }
+    if (VERBOSE)
+      cerr << "[SCANNING " << chr_seq.size() << " SEQUENCES LOADED FROM "
+        << chrom_files.size() << " FILES]" << endl;
 
+    vector<GenomicRegion> coordinates;
+    vector<string> state_bits;
+    size_t progress = 0;
+#pragma omp parallel for
+    for (size_t i = 0; i < chr_seq.size(); ++i) {
       vector<size_t> states;
-      vector<string> state_bits;
-
-      if (VERBOSE)
-        cerr << "[SCANNING " << chrom->second
-          << " " << file_counter++ << " OF "
-          << chrom_files.size() << "]" << endl;
-      vector<GenomicRegion> coordinates;
-      for (size_t i = 0; i < chr_seq.size(); ++i) {
-        if (VERBOSE)
-          cerr << "\t" << i+1 << "/" << chr_seq.size()
-            << "\t" << chr_name[i] << endl;
-        if (DEBUG)
-          cerr << chr_name[i] << endl;
-        hmm.PosteriorDecoding(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
-        identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-          chr_name[i], true, NO_LOG_ODDS, coordinates, state_bits);
-        
-        revcomp_inplace(chr_seq[i]);
-        hmm.ComplementBackground();
-        hmm.PosteriorDecoding(false, false, !NO_LOG_ODDS, chr_seq[i], states);
-        identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-          chr_name[i], false, NO_LOG_ODDS, coordinates, state_bits);
+      if (DEBUG) {
+#pragma omp critical (debug_info)
+        cerr << chr_name[i] << endl;
       }
-      if (Z_CUTOFF - 0.0 > 1e-10) {
-        if (VERBOSE)
-          cerr << "[CALCULATING Z-SCORES]" << endl;
-        zscore_filter(coordinates, Z_CUTOFF);
-      }
-      for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
-        i < coordinates.end(); ++i)
+      hmm.PosteriorDecoding(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
+#pragma omp atomic
+      ++progress;
+#pragma omp critical (update_results1)
       {
-        if (Z_CUTOFF - 0.0 < 1e-10 || i->get_score() > Z_CUTOFF)
-          out << *i << "\t" << state_bits[i-coordinates.begin()] << endl;
+      identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
+        chr_name[i], true, NO_LOG_ODDS, coordinates, state_bits);
       }
+      if (VERBOSE && progress % 10 == 0) {
+#pragma omp critical (progress1)
+        cerr << "\r\tPROCESSED " << 100*progress/chr_seq.size()/2 << "%";
+      }
+    }
+#pragma omp barrier
+    hmm.ComplementBackground();
+#pragma omp parallel for
+    for (size_t i = 0; i < chr_seq.size(); ++i) {
+      revcomp_inplace(chr_seq[i]);
+      vector<size_t> states;
+      hmm.PosteriorDecoding(false, false, !NO_LOG_ODDS, chr_seq[i], states);
+#pragma omp atomic
+      ++progress;
+#pragma omp critical (update_results2)
+      {
+      identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
+        chr_name[i], false, NO_LOG_ODDS, coordinates, state_bits);
+      }
+      if (VERBOSE && progress % 10 == 0) {
+#pragma omp critical (progress2)
+        cerr << "\r\tPROCESSED " << 100*progress/chr_seq.size()/2 << "%";
+      }
+    }
+#pragma omp barrier
+    if (Z_CUTOFF - 0.0 > 1e-10) {
+      if (VERBOSE)
+        cerr << endl << "[CALCULATING Z-SCORES]" << endl;
+      zscore_filter(coordinates, Z_CUTOFF);
+    }
+    for (vector<GenomicRegion>::const_iterator i = coordinates.begin();
+      i < coordinates.end(); ++i)
+    {
+      if (Z_CUTOFF - 0.0 < 1e-10 || i->get_score() > Z_CUTOFF)
+        out << *i << "\t" << state_bits[i-coordinates.begin()] << endl;
     }
   }
   catch (const SMITHLABException &e) {
