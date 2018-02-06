@@ -232,6 +232,7 @@ main (int argc, const char **argv) {
     vector<GenomicRegion> coordinates;
     vector<string> state_bits;
     size_t progress = 0;
+    const size_t TICK = NUM_THREAD*4+1>50 ? NUM_THREAD*4+1 : 50;
 #pragma omp parallel for
     for (size_t i = 0; i < chr_seq.size(); ++i) {
       vector<size_t> states;
@@ -247,7 +248,7 @@ main (int argc, const char **argv) {
       identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
         chr_name[i], true, NO_LOG_ODDS, coordinates, state_bits);
       }
-      if (VERBOSE && progress % 10 == 0) {
+      if (VERBOSE && progress % TICK == 0) {
 #pragma omp critical (progress1)
         cerr << "\r\tPROCESSED " << 100*progress/chr_seq.size()/2 << "%";
       }
@@ -266,7 +267,7 @@ main (int argc, const char **argv) {
       identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
         chr_name[i], false, NO_LOG_ODDS, coordinates, state_bits);
       }
-      if (VERBOSE && progress % 10 == 0) {
+      if (VERBOSE && progress % TICK == 0) {
 #pragma omp critical (progress2)
         cerr << "\r\tPROCESSED " << 100*progress/chr_seq.size()/2 << "%";
       }
