@@ -1111,7 +1111,7 @@ ProfileHMM::Print(ostream& out, const bool HUM_READABLE) const {
 string
 ProfileHMM::Consensus(void) const {
   vector<char> bases;
-  for (size_t i = 0; i < model_len; ++i) {
+  for (size_t i = 1; i <= model_len; ++i) {
     const vector<double>::const_iterator max_itr =
       std::max_element(emission[i].begin(), emission[i].end());
     bases.push_back(int2base(max_itr - emission[i].begin()));
