@@ -112,26 +112,23 @@ set_emission_prior(matrix &emis_prior) {
 double
 get_5prime_truncation_prior(const size_t model_len,
     const size_t idx) {
-  //const double first_col_weight = 0.5;
-  //if (idx == 1)
-  //  return log(first_col_weight);
-  //else
-  //  return log((1.0 - first_col_weight)) - log((model_len - 1));
-  return -log(model_len);
+  const double first_col_weight = 0.5;
+  if (idx == 1)
+    return log(first_col_weight);
+  else
+    return log(1.0 - first_col_weight) - log(model_len - 1);
+  //return -log(model_len);
 }
 
 double
 get_3prime_truncation_prior(const size_t model_len,
     const size_t idx) {
-  /*
-  const double last_col_weight = 0.5;
-  if (idx == model_len)
-    return last_col_weight;
-  else
-    return (1.0 - last_col_weight) / (model_len - 1);
-    */
-  return -log(model_len);
-  //return log(0.05);
+  //const double last_col_weight = 0.5;
+  //if (idx == model_len)
+  //  return last_col_weight;
+  //else
+  //  return log(1.0 - last_col_weight) - log(model_len - 1);
+  return -log(model_len-1);
 }
 
 double

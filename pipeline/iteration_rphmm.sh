@@ -5,9 +5,11 @@ MUSCLE=~mengzhou/panfs/tools/muscle3.8.31_i86linux64
 ESL=~mengzhou/panfs/tools/hmmer-3.1b1/binaries/esl-reformat
 BUILD=~mengzhou/panfs/tools/hmmer-3.1b1/binaries/hmmbuild
 RPHMM=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/bin
+NUMBER=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/pipeline/get_number.sh
 NTHREAD=16
 
-GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+#GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+GENOME=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
 RAND=500
 MAX_ITR=9
 JACCARD=0
@@ -23,7 +25,7 @@ function prep_seq() {
   # $5: length of the consensus
   echo "[EXTRACTING SEQ]"
   REG=${3}.bed
-  echo $1, $2, $REG, $4, $5
+  #echo $1, $2, $REG, $4, $5
   TEMP=$(mktemp tmp.$$.XXXXXXXX)
   # the score is length normalized -log(E-value)
   cat $2 | awk -v LEN=$5 -v EXT=15 'BEGIN{OFS="\t"}{\
@@ -51,7 +53,7 @@ function build_nhmmer() {
 }
 
 function build_rphmm() {
-  $RPHMM/construct -m -o ${1%.*}.params $1
+  $RPHMM/construct -n -m -o ${1%.*}.params $1
 }
 
 function scan_nhmmer() {
@@ -85,6 +87,13 @@ function scan_rphmm() {
     sort -k1,1 -k2,2n -k3,3n > $3
 }
 
+function number_monomers() {
+  # $1: scan result .bed
+  NAME=${1%%.*}
+  cp ${1%.*}.out ${NAME}.final.out
+  $NUMBER ${NAME}.final.out
+}
+
 if [ $# -lt 3 ]
 then
   echo "Usage: $0 <CONSENSUS.FA> <HMMER_OUTPUT_BED> <SEQ_OF_ROI>"
@@ -114,10 +123,6 @@ else
     echo "[BUILDING]"
     build_rphmm ${NAME}.aln
     echo "[SCANNING]"
-    #for i in {0..7};do echo $i; done | parallel \
-    #  "scan_rphmm ${NAME}.params list.{}.fa ${NAME}.{}.scan.bed"
-    #cat ${NAME}.?.scan.out | sort -k1,1 -k2,2n -k3,3n > ${CURR_OUT%.*}.out
-    #cat ${NAME}.?.scan.bed | sort -k1,1 -k2,2n -k3,3n > $CURR_OUT
     scan_rphmm ${NAME}.params $REF $CURR_OUT
 
     INTER=$(intersectBed -a $PREV_OUT -b $CURR_OUT | sort -k1,1 -k2,2n -k3,3n | mergeBed\
@@ -131,4 +136,5 @@ else
     PREV_OUT=$CURR_OUT
     echo ""
   done
+  number_monomers $CURR_OUT
 fi

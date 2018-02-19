@@ -1,7 +1,8 @@
 #!/bin/bash
 # Input: BED file converted from nhmmer scan result
 # Needs to add parameter support of TRF pipeline
-REF=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+#REF=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+REF=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
 TRF_PROG=/home/rcf-40/mengzhou/panfs/repeats/cyclic/sim/trf407b.linux64
 REV_COMP=/home/rcf-40/mengzhou/scripts/utils/revcomp_fa.py
 MUSCLE=/home/rcf-40/mengzhou/panfs/tools/muscle3.8.31_i86linux64
@@ -103,7 +104,6 @@ function sample_by_len() {
     ${IN_BED%.*}.rand${NUM}.bed
   bedtools getfasta -s -name -fi $REF -bed ${IN_BED%.*}.rand${NUM}.bed \
     -fo ${IN_BED%.*}.rand${NUM}.fa
-  sed -i 's/[nN]/T/g' ${IN_BED%.*}.rand${NUM}.fa
 }
 
 if [ $# -lt 1 ]
@@ -125,7 +125,7 @@ echo "Model lenths is estimated to be ${CORE_LEN}."
 sample_by_len ${INIT_PROMOTER}.split.bed $CORE_LEN 20 500
 muscle_align ${INIT_PROMOTER}.split.rand${NUM}.fa
 
-$RPHMM/construct -u -o ${INIT_PROMOTER}.split.rand${NUM}.params \
+$RPHMM/construct -n -u -o ${INIT_PROMOTER}.split.rand${NUM}.params \
   ${INIT_PROMOTER}.split.rand${NUM}.aln
-scan_rpmm ${INIT_PROMOTER}.fa ${INIT_PROMOTER}.split.rand${NUM}.params \
-  ${INIT_PROMOTER}.split.rand${NUM}
+tail -n +2 ${INIT_PROMOTER}.split.rand${NUM}.params | head -n 1 | \
+  awk '{print ">consensus"; print $2}' > consensus.fa
