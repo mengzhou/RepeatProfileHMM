@@ -36,6 +36,7 @@
 
 using std::vector;
 using std::string;
+using std::to_string;
 using std::unordered_map;
 using std::ifstream;
 using std::istringstream;
@@ -64,6 +65,27 @@ get_state_bits(const vector<size_t> &copy_states,
   return bits;
 }
 
+string
+get_state_CIGAR(const vector<size_t> &copy_states, const size_t width) {
+  // This function works only for complete matrix indices, therefore no offset
+  // needed.
+  string cigar = "";
+  size_t counter = 1;
+  string prev_type = state_type_to_str(copy_states.front(), width);
+  for (vector<size_t>::const_iterator i = copy_states.begin()+1;
+      i < copy_states.end(); ++i) {
+    string curr_type = state_type_to_str(*i, width);
+    if (curr_type == prev_type) ++counter;
+    else {
+      cigar = cigar + to_string(counter) + prev_type;
+      counter = 1;
+    }
+    prev_type = curr_type;
+  }
+  cigar = cigar + to_string(counter) + prev_type;
+  return cigar;
+}
+
 void
 identify_repeats(const ProfileHMM &hmm,
     const size_t bg_state,
@@ -73,6 +95,7 @@ identify_repeats(const ProfileHMM &hmm,
     const string chr_name,
     const bool SENSE_STRAND,
     const bool NO_LOG_ODDS,
+    const bool USE_BITS,
     vector<GenomicRegion> &coordinates,
     vector<string> &state_bits) {
   // use bg_state = model_len, offset = 0 for collapsed matrix decoding;
@@ -82,17 +105,23 @@ identify_repeats(const ProfileHMM &hmm,
   const size_t chr_len = states.size();
   size_t start = 0, end = 0;
   for (vector<size_t>::const_iterator i = states.begin();
-      i < states.end(); ++i) {
+      i < states.end()-1; ++i) {
     vector<size_t>::const_iterator j = next(i);
     // find start and end of region
-    if (*i < bg_state && i == states.begin())
+    if (*i != bg_state && i == states.begin())
       start = 0;
-    else if (*i == bg_state && *j < bg_state)
+    else if (*i == bg_state && *j != bg_state)
       start = j - states.begin();
-    else if ((*i < bg_state && *j == bg_state)
-        || (*i < bg_state && j == states.end())
-        || (*i < bg_state && *j < bg_state && *i > *j + INTERNAL_LOOP_LEN))
+    else if ((*i != bg_state && *j == bg_state)
+        || (*i != bg_state && j == states.end()))
       end = j - states.begin();
+    else if (*i != bg_state && *j != bg_state) {
+      // check if internal loop exists
+      state prev(model_len, *i);
+      state curr(model_len, *j);
+      if (prev.idx > curr.idx + INTERNAL_LOOP_LEN)
+        end = j - states.begin();
+    }
     if (end > start) {
       const string obs = chr_seq.substr(start, end - start);
       // this is the score using log-odds
@@ -119,12 +148,13 @@ identify_repeats(const ProfileHMM &hmm,
       vector<size_t>::const_iterator first = states.begin() + start;
       vector<size_t>::const_iterator last = states.begin() + end;
       vector<size_t> copy_states(first, last);
-      string bits = get_state_bits(copy_states, offset, model_len);
-      state_bits.push_back(bits);
-      if (*i != bg_state && *j != bg_state && *i > *j)
-        start = j - states.begin();
+      string bits;
+      if (USE_BITS)
+        bits = get_state_bits(copy_states, offset, model_len);
       else
-        start = end;
+        bits = get_state_CIGAR(copy_states, model_len);
+      state_bits.push_back(bits);
+      start = end;
     }
   }
 }
@@ -159,6 +189,7 @@ main (int argc, const char **argv) {
     bool VERBOSE = false;
     bool DEBUG = false;
     bool NO_LOG_ODDS = false;
+    bool USE_BITS = false;
     double Z_CUTOFF = 1.0;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
@@ -180,6 +211,8 @@ main (int argc, const char **argv) {
       false, Z_CUTOFF);
     opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
         Default: 1.", false, NUM_THREAD);
+    opt_parse.add_opt("bits", 'b', "Use state bits instead of CIGAR.",
+      false, USE_BITS);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
@@ -246,7 +279,7 @@ main (int argc, const char **argv) {
 #pragma omp critical (update_results1)
       {
       identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-        chr_name[i], true, NO_LOG_ODDS, coordinates, state_bits);
+        chr_name[i], true, NO_LOG_ODDS, USE_BITS, coordinates, state_bits);
       }
       if (VERBOSE && progress % TICK == 0) {
 #pragma omp critical (progress1)
@@ -265,7 +298,7 @@ main (int argc, const char **argv) {
 #pragma omp critical (update_results2)
       {
       identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
-        chr_name[i], false, NO_LOG_ODDS, coordinates, state_bits);
+        chr_name[i], false, NO_LOG_ODDS, USE_BITS, coordinates, state_bits);
       }
       if (VERBOSE && progress % TICK == 0) {
 #pragma omp critical (progress2)

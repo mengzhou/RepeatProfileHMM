@@ -28,6 +28,9 @@
 size_t
 baseint2stateint(const size_t &baseint, const bool marked);
 
+std::string
+state_type_to_str(const size_t idx, const size_t model_len);
+
 struct state {
   state();
   state(const size_t b, const size_t i, const size_t s) :

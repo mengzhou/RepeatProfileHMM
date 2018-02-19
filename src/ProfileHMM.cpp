@@ -27,6 +27,7 @@ using std::vector;
 using std::pair;
 using std::max;
 using std::string;
+using std::to_string;
 using std::endl;
 using std::cout;
 using std::cerr;
@@ -47,6 +48,22 @@ baseint2stateint(const size_t &baseint,
     return 1; // insertion
   else
     return 4; // gap in not marked column; this is not supposed to happen
+}
+
+string
+state_type_to_str(const size_t idx, const size_t model_len) {
+  // M_0~M_L; I_0~I_L-1; D_1~D_L
+  assert(idx >= 0);
+  if (idx <= model_len)
+    return "M";
+  else if (idx == model_len+1)
+    return "N";
+  else if (idx <= model_len*2)
+    return "I";
+  else if (idx <= model_len*3)
+    return "D";
+  else
+    return "*";
 }
 
 state::state() {};
@@ -200,11 +217,11 @@ ProfileHMM::state_idx_to_str(const size_t idx) const {
   if (idx == 0)
     return "B";
   else if (idx <= model_len)
-    return "M" + std::to_string(idx);
+    return "M" + to_string(idx);
   else if (idx <= model_len * 2)
-    return "I" + std::to_string(idx - model_len - 1);
+    return "I" + to_string(idx - model_len - 1);
   else if (idx <= model_len * 3)
-    return "D" + std::to_string(idx - model_len * 2);
+    return "D" + to_string(idx - model_len * 2);
   else
     return "E";
 }
@@ -212,9 +229,9 @@ ProfileHMM::state_idx_to_str(const size_t idx) const {
 string
 ProfileHMM::state_idx_to_str_c(const size_t idx) const {
   if (idx < model_len)
-    return "M" + std::to_string(idx+1);
+    return "M" + to_string(idx+1);
   else if (idx < model_len * 2)
-    return "I" + std::to_string(idx - model_len);
+    return "I" + to_string(idx - model_len);
   else
     return "N";
 }
@@ -865,7 +882,7 @@ ProfileHMM::PosteriorDecoding(const bool VERBOSE,
         i < states.end(); ++i)
       cerr << i - states.begin()
         //<< "\t" << *i
-        << "\t" << state_idx_to_str(*i) << endl;
+        << "\t" << state_idx_to_str(*i) << "\t" << *i << endl;
 
     //cerr << std::setprecision(4);
     //cerr << endl << "Forward matrix:" << endl;
