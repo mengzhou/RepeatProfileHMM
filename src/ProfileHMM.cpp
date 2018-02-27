@@ -51,9 +51,8 @@ baseint2stateint(const size_t &baseint,
 }
 
 string
-state_type_to_str(const size_t idx, const size_t model_len) {
+state_type_to_str(const size_t model_len, const size_t idx) {
   // M_0~M_L; I_0~I_L-1; D_1~D_L
-  assert(idx >= 0);
   if (idx <= model_len)
     return "M";
   else if (idx == model_len+1)
@@ -194,14 +193,14 @@ ProfileHMM::ComplementBackground(void) {
 size_t
 ProfileHMM::index_m(const size_t idx) const {
   // M_0 ~ M_L
-  assert(idx >= 0 && idx <= model_len);
+  assert(idx <= model_len);
   return idx;
 }
 
 size_t
 ProfileHMM::index_i(const size_t idx) const {
   // I_0 ~ I_L-1 + (L+1)*M
-  assert(idx >= 0 && idx <= model_len - 1);
+  assert(idx <= model_len - 1);
   return idx + model_len + 1;
 }
 

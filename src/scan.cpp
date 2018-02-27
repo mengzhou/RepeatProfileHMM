@@ -70,19 +70,36 @@ get_state_CIGAR(const vector<size_t> &copy_states, const size_t width) {
   // This function works only for complete matrix indices, therefore no offset
   // needed.
   string cigar = "";
-  size_t counter = 1;
-  string prev_type = state_type_to_str(copy_states.front(), width);
+  size_t query_counter = 1;
+  string prev_type = state_type_to_str(width, copy_states.front());
+  state prev_state = state(width, copy_states.front());
+  // 5' truncation
+  if (prev_state.idx > 1)
+    cigar = cigar + to_string(prev_state.idx-1) + "N";
   for (vector<size_t>::const_iterator i = copy_states.begin()+1;
       i < copy_states.end(); ++i) {
-    string curr_type = state_type_to_str(*i, width);
-    if (curr_type == prev_type) ++counter;
-    else {
-      cigar = cigar + to_string(counter) + prev_type;
-      counter = 1;
+    state curr_state = state(width, *i);
+    if (curr_state.stateint == prev_state.stateint) {
+      if (curr_state.idx - prev_state.idx > 1 && curr_state.idx > prev_state.idx) {
+        // deletion
+        cigar = cigar + to_string(query_counter) + prev_type;
+        cigar = cigar + to_string(curr_state.idx-prev_state.idx-1) + "D";
+        query_counter = 0;
+      }
     }
-    prev_type = curr_type;
+    else {
+      // change of type
+      cigar = cigar + to_string(query_counter) + prev_type;
+      query_counter = 0;
+    }
+    ++query_counter;
+    prev_type = state_type_to_str(width, *i);
+    prev_state = curr_state;
   }
-  cigar = cigar + to_string(counter) + prev_type;
+  cigar = cigar + to_string(query_counter) + prev_type;
+  // 3' truncation
+  if (prev_state.idx < width)
+    cigar = cigar + to_string(width-prev_state.idx) + "N";
   return cigar;
 }
 
