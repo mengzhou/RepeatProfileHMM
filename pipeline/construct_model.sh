@@ -1,8 +1,8 @@
 #!/bin/bash
 # Input: BED file converted from nhmmer scan result
 # Needs to add parameter support of TRF pipeline
-#REF=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
-REF=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
+REF=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+#REF=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
 TRF_PROG=/home/rcf-40/mengzhou/panfs/repeats/cyclic/sim/trf407b.linux64
 REV_COMP=/home/rcf-40/mengzhou/scripts/utils/revcomp_fa.py
 MUSCLE=/home/rcf-40/mengzhou/panfs/tools/muscle3.8.31_i86linux64
@@ -53,12 +53,13 @@ function get_init_promoter() {
   NAME=${IN%.bed}
   NHMMER_EXT=$2
   PROMOTER_EXT=$3
+  CHR_SIZES=$4
   INIT_PROMOTER=${FAMILY}.ext${PROMOTER_EXT}
   cat $IN | mergeBed -d $NHMMER_EXT -s | sort -k1,1 -k2,2n -k3,3n | \
-    awk -v ext=$PROMOTER_EXT -v family=$NAME \
-    'BEGIN{OFS="\t"}{start=$2-ext; end=$3+ext; strand=$4;\
-      print $1, start, end, family"|"$1":"start"-"end"|"strand, end-start, strand;\
-    }' > ${INIT_PROMOTER}.bed
+    bedtools slop -b $PROMOTER_EXT -g $CHR_SIZES -s | \
+    awk -v family=$NAME \
+    'BEGIN{OFS="\t"}{print $1, $2, $3, family"|"$1":"$2"-"$3"|"$4, $3-$2, $4;}'\
+    > ${INIT_PROMOTER}.bed
   bedtools getfasta -s -name -fi $REF -bed ${INIT_PROMOTER}.bed -fo \
     ${INIT_PROMOTER}.fa
 }
@@ -67,7 +68,7 @@ function get_init_monomer() {
   # get monomers using TRF, and construct the initial model
   echo "[CONSTRUCTING INITIAL MODEL]"
   IN=$1
-  trf_by_revcomp $IN 200 50
+  trf_by_revcomp $IN $2 50
   muscle_align ${1%.*}.monomers.fa
   $RPHMM/construct -o ${1%.*}.initial.params ${1%.*}.monomers.aln
 }
@@ -106,15 +107,20 @@ function sample_by_len() {
     -fo ${IN_BED%.*}.rand${NUM}.fa
 }
 
-if [ $# -lt 1 ]
+if [ $# -lt 3 ]
 then
-  echo "Usage: $0 <nhmmer output .bed>"
+  echo "Usage: $0 <nhmmer output .bed> <extension length for each promoter> <file for chr sizes>"
   exit 0
+fi
+if [ ! -e $3 ]
+then
+  echo "File for chr sizes: [$3] does not exist!"
+  exit 1
 fi
 
 FAMILY=${1%.*}
-get_init_promoter $1 20 200
-get_init_monomer ${INIT_PROMOTER}.fa
+get_init_promoter $1 20 $2 $3
+get_init_monomer ${INIT_PROMOTER}.fa $2
 # first scan using the initial model to determine monomer bounds
 scan_rpmm ${INIT_PROMOTER}.fa ${INIT_PROMOTER}.initial.params ${INIT_PROMOTER}.split
 # estimate the model length by getting the median of top 8 abundant lengths

@@ -8,8 +8,8 @@ RPHMM=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/bin
 NUMBER=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/pipeline/get_number.sh
 NTHREAD=16
 
-#GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
-GENOME=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
+GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+#GENOME=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
 RAND=500
 MAX_ITR=9
 JACCARD=0
@@ -77,7 +77,7 @@ function scan_rphmm() {
   # $1: profile-HMM
   # $2: reference genome FA
   # $3: output BED
-  $RPHMM/scan -v -p $NTHREAD -c $2 $1 | \
+  $RPHMM/scan -v -p $NTHREAD -c $2 $1 | awk '$6=="+"' | \
     sort -k1,1 -k2,2n -k3,3n > ${3%.*}.out
   awk 'BEGIN{OFS="\t"}{split($1, f, "|"); split(f[2], ff, "[:-]");\
       chr=ff[1]; start=ff[2]; end=ff[3];\
