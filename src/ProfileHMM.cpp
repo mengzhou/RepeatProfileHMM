@@ -791,6 +791,8 @@ ProfileHMM::train_expectation(const bool VERBOSE,
   const size_t seq_len = observation.length();
   const double ll = posterior_prob(forward);
   // transition
+  // N's are excluded in training process because they
+  // do not provide any information
   for (unordered_map<size_t, vector<size_t> >::const_iterator trans =
       transitions_to.begin(); trans != transitions_to.end(); ++trans) {
     const size_t i = trans->first;
@@ -798,14 +800,16 @@ ProfileHMM::train_expectation(const bool VERBOSE,
         j < trans->second.end(); ++j) {
       vector<double> list;
       for (size_t pos = 0; pos < seq_len - 1; ++pos) {
-        if (state_can_emit(*j)) {
-          list.push_back(forward[pos+1][i] + transition[i][*j]
-              + emission[*j][base2int(observation[pos+1])]
-              + backward[pos+2][*j]);
-        }
-        else {
-          list.push_back(forward[pos+1][i] + transition[i][*j]
-              + backward[pos+1][*j]);
+        if (base2int(observation[pos])<4 && base2int(observation[pos+1])<4) {
+          if (state_can_emit(*j)) {
+            list.push_back(forward[pos+1][i] + transition[i][*j]
+                + emission[*j][base2int(observation[pos+1])]
+                + backward[pos+2][*j]);
+          }
+          else {
+            list.push_back(forward[pos+1][i] + transition[i][*j]
+                + backward[pos+1][*j]);
+          }
         }
       }
       e_trans[i][*j] = log_sum_log(e_trans[i][*j],
@@ -815,9 +819,12 @@ ProfileHMM::train_expectation(const bool VERBOSE,
   // emission
   for (size_t i = index_m(1); i < index_d(1); ++i) {
     matrix list(4, vector<double>());
-    for (size_t pos = 0; pos < seq_len - 1; ++pos)
-      list[base2int(observation[pos])].push_back(
-          forward[pos+1][i] + backward[pos+1][i]);
+    for (size_t pos = 0; pos < seq_len - 1; ++pos) {
+      const int curr_baseint = base2int(observation[pos]);
+      if (curr_baseint<4)
+        list[curr_baseint].push_back(
+            forward[pos+1][i] + backward[pos+1][i]);
+    }
     for (size_t k = 0; k < 4; ++k)
       e_emiss[i][k] = log_sum_log(e_emiss[i][k],
         smithlab::log_sum_log_vec(list[k], list[k].size()) - ll);

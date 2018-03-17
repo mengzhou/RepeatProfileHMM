@@ -8,7 +8,7 @@ RPHMM=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/bin
 NUMBER=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/pipeline/get_number.sh
 NTHREAD=16
 
-GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+#GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
 #GENOME=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
 RAND=500
 MAX_ITR=9
@@ -23,6 +23,7 @@ function prep_seq() {
   # $3: name of the output, usually the name of current iteration
   # $4: number of sequences to sample
   # $5: length of the consensus
+  # $6: reference genome
   echo "[EXTRACTING SEQ]"
   REG=${3}.bed
   #echo $1, $2, $REG, $4, $5
@@ -38,7 +39,7 @@ function prep_seq() {
       {print rand(), $0}' | sort -k1,1g | cut -f 2- | awk -v s=$4 'NR<=s' | \
     sort -k1,1 -k2,2n -k3,3n > $REG
   rm $TEMP
-  bedtools getfasta -fi $GENOME -s -name -bed $REG -fo ${3}.fa
+  bedtools getfasta -fi $6 -s -name -bed $REG -fo ${3}.fa
   cat $1 >> ${3}.fa
 }
 
@@ -94,9 +95,9 @@ function number_monomers() {
   $NUMBER ${NAME}.final.out
 }
 
-if [ $# -lt 3 ]
+if [ $# -lt 4 ]
 then
-  echo "Usage: $0 <CONSENSUS.FA> <HMMER_OUTPUT_BED> <SEQ_OF_ROI>"
+  echo "Usage: $0 <CONSENSUS.FA> <HMMER_OUTPUT_BED> <SEQ_OF_ROI> <REF GENOME>"
   exit
 else
   export -f scan_rphmm
@@ -111,13 +112,13 @@ else
     echo "[ITERATION $ITR]"
     NAME=${PREV_OUT%%.*}.${ITR}.20bp.rand${RAND}
     CURR_OUT=${NAME}.scan.bed
-    prep_seq $1 $PREV_OUT $NAME $RAND $LEN
+    prep_seq $1 $PREV_OUT $NAME $RAND $LEN $4
     muscle ${NAME}.fa
 
     #nhmmer
     #build_nhmmer ${NAME}.sto
     #echo "[SCANNING]"
-    #scan_nhmmer ${NAME}.hmm $GENOME $CURR_OUT
+    #scan_nhmmer ${NAME}.hmm $4 $CURR_OUT
 
     #rphmm
     echo "[BUILDING]"

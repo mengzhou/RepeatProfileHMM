@@ -1,7 +1,7 @@
 #!/bin/bash
 # Input: BED file converted from nhmmer scan result
 # Needs to add parameter support of TRF pipeline
-REF=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
+#REF=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
 #REF=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
 TRF_PROG=/home/rcf-40/mengzhou/panfs/repeats/cyclic/sim/trf407b.linux64
 REV_COMP=/home/rcf-40/mengzhou/scripts/utils/revcomp_fa.py
@@ -39,10 +39,11 @@ function trf_by_revcomp() {
       {l=\$0; flag=1}else if(flag==1 && \$5>=$MONOMER_MIN_LEN && \
       \$5<=$MONOMER_MAX_LEN && \$4>=$MONOMER_MIN_CN\
       && \$1>=$MONOMER_MIN_START && \$1<=$MONOMER_MAX_START){print l; \
-      print \$14; flag=0}}" ${NAME}.rev.monomers.list | \
-    sed 's/^@/>/g' > ${NAME}.rev.monomers.fa
-  $REV_COMP ${NAME}.rev.monomers.fa > ${NAME}.monomers.fa
-  rm ${NAME}.rev.monomers.fa $INPUT_REV
+      print \$14; flag=0}}" ${NAME}.rev.monomers.list | sed 's/^@/>/g' | \
+    awk 'BEGIN{srand(); OFS="\t"}{if($1~/^>/){name=$1}else{print rand(), name, $1}}' | \
+    sort -k1,1g | cut -f 2- | awk 'NR<=500{print $1; print $2}' > ${NAME}.rev.monomers.rand500.fa
+  $REV_COMP ${NAME}.rev.monomers.rand500.fa > ${NAME}.monomers.fa
+  rm ${NAME}.rev.monomers.rand500.fa $INPUT_REV
 }
 
 function get_init_promoter() {
@@ -54,6 +55,7 @@ function get_init_promoter() {
   NHMMER_EXT=$2
   PROMOTER_EXT=$3
   CHR_SIZES=$4
+  REF=$5
   INIT_PROMOTER=${FAMILY}.ext${PROMOTER_EXT}
   cat $IN | mergeBed -d $NHMMER_EXT -s | sort -k1,1 -k2,2n -k3,3n | \
     bedtools slop -b $PROMOTER_EXT -g $CHR_SIZES -s | \
@@ -107,9 +109,9 @@ function sample_by_len() {
     -fo ${IN_BED%.*}.rand${NUM}.fa
 }
 
-if [ $# -lt 3 ]
+if [ $# -lt 4 ]
 then
-  echo "Usage: $0 <nhmmer output .bed> <extension length for each promoter> <file for chr sizes>"
+  echo "Usage: $0 <nhmmer output .bed> <extension length for each promoter> <file for chr sizes> <reference genome>"
   exit 0
 fi
 if [ ! -e $3 ]
@@ -119,7 +121,7 @@ then
 fi
 
 FAMILY=${1%.*}
-get_init_promoter $1 20 $2 $3
+get_init_promoter $1 20 $2 $3 $4
 get_init_monomer ${INIT_PROMOTER}.fa $2
 # first scan using the initial model to determine monomer bounds
 scan_rpmm ${INIT_PROMOTER}.fa ${INIT_PROMOTER}.initial.params ${INIT_PROMOTER}.split
