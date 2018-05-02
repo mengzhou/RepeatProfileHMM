@@ -1483,28 +1483,32 @@ ProfileHMM::load_from_file(const string filename) {
 void
 ProfileHMM::FisherScoreVector(const string &sequence,
     vector<double> &score) const {
+  // Organization of the output values (the score vector):
+  // 4 states for emission for each state of M_1~M_L and I_0;
+  // plus expected counts for each of those states (model_len+1).
   matrix forward, backward;
-  forward_algorithm_c(false, false, sequence, forward);
-  backward_algorithm_c(false, false, sequence, backward);
+  forward_algorithm(false, false, sequence, forward);
+  backward_algorithm(false, false, sequence, backward);
   // model_len*4: all M states; +4: I_0
   score.resize(model_len*4+4, 0.0);
   const double posterior_p = posterior_prob(forward);
 
   // scores for states M_1 to M_L, plus I_0
-  for (size_t state_index = 0; state_index < model_len+1; ++state_index) {
+  for (size_t state_index = index_m(1); state_index < index_i(0)+1;
+      ++state_index) {
     // posterior count of staying at state_idx
     vector<double> state_count;
-    for (size_t i = 0; i < forward.size() - 1; ++i) {
-      // the loop is from position 0 to N-2 (0-based coordinates)
+    for (size_t i = 1; i < forward.size(); ++i) {
+      // the loop is from position 1 to N of the string (1-based coordinates)
+      // see forward_algorithm()
       state_count.push_back(forward[i][state_index] + backward[i][state_index]
         - posterior_p);
     }
-    assert(state_count.size() == sequence.length() - 1);
     const double expected_state_count =
       exp(smithlab::log_sum_log_vec(state_count, state_count.size()));
 
     vector<vector<double> > nt_count(4, vector<double>(1, LOG_ZERO));
-    vector<double> m_to_next_m, m_to_curr_i, m_to_next_d;
+    //vector<double> m_to_next_m, m_to_curr_i, m_to_next_d;
     //const size_t idx_next_m = state_index + 1;
     //const size_t idx_curr_i = state_index + model_len;
     //const size_t idx_next_d = idx_next_m + 1;
@@ -1536,12 +1540,13 @@ ProfileHMM::FisherScoreVector(const string &sequence,
     for (size_t nt_idx = 0; nt_idx < 4; ++nt_idx) {
       const double expected_emission_count =
         smithlab::log_sum_log_vec(nt_count[nt_idx], nt_count[nt_idx].size());
-      score[state_index*4+nt_idx] = exp(expected_emission_count
-          - emission_c[state_index][nt_idx])
+      // use state_index-1 is because forward[0] corresponds to M_0
+      score[(state_index-1)*4+nt_idx] = exp(expected_emission_count
+          - emission[state_index][nt_idx])
         - expected_state_count;
     }
     // scores for expected state count (normalization purpose)
-    score.push_back(smithlab::log_sum_log_vec(state_count, state_count.size()));
+    score.push_back(expected_state_count);
     // scores for transition, M states only
     //if (state_index < model_len - 1) {
     //  score.push_back(exp(smithlab::log_sum_log_vec(m_to_next_m,
