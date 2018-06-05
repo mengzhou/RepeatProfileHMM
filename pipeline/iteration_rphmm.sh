@@ -29,7 +29,7 @@ function prep_seq() {
   #echo $1, $2, $REG, $4, $5
   TEMP=$(mktemp tmp.$$.XXXXXXXX)
   # the score is length normalized -log(E-value)
-  cat $2 | awk -v LEN=$5 -v EXT=15 'BEGIN{OFS="\t"}{\
+  cat $2 | awk -v LEN=$5 -v EXT=20 'BEGIN{OFS="\t"}{\
       score=-log($8)/$5; if($5<=LEN+EXT && $5>=LEN-EXT)\
       {print $1, $2, $3, $4"|"$1":"$2"-"$3"|"$6, score, $6}}' | sort -k5,5gr > $TEMP
   TOTAL=$(cat $TEMP | wc -l)
