@@ -20,6 +20,7 @@
 #include <string>
 #include <fstream>
 #include <iomanip>
+#include <omp.h>
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
@@ -65,6 +66,7 @@ main(int argc, const char **argv) {
     double GAP = 1.0;
     double MM = 1.0;
     bool VERBOSE = false;
+    size_t NUM_THREAD = 1;
     string in_file, out_file;
 
     OptionParser opt_parse(strip_path(argv[0]),
@@ -77,6 +79,8 @@ main(int argc, const char **argv) {
       false, GAP);
     opt_parse.add_opt("mismatch", 'm', "Penalty for mismatch. Default: 1.0",
       false, MM);
+    opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
+        Default: 1.", false, NUM_THREAD);
     opt_parse.add_opt("verbose", 'v',
       "Verbose mode. Only use this for interactive enviroment.", false, VERBOSE);
 
@@ -107,43 +111,58 @@ main(int argc, const char **argv) {
       throw SMITHLABException("could not find any sequence in: "
           + in_file);
 
+    omp_set_dynamic(0);
+    omp_set_num_threads(NUM_THREAD);
+
     const size_t total = seq_name.size()*(seq_name.size()-1)/2;
     vector<vector<double> > sc(seq_name.size(), vector<double>(seq_name.size(), 0.0));
     size_t counter = 0;
-    for (size_t i = 0; i < seq_name.size(); ++i)
-      out << "\t" << seq_name[i];
-    out << endl;
+#pragma omp parallel for
     for (size_t i = 0; i < seq_seq.size(); ++i) {
-      out << seq_name[i];
+#pragma omp parallel for
       for (size_t j = 0; j < seq_seq.size(); ++j) {
         if (j>i) {
           sc[i][j] = g_align_hamming(seq_seq[i], seq_seq[j], GAP, MM);
+#pragma omp atomic
           ++counter;
-          if (VERBOSE && counter % 100 == 1) {
-            cerr << "\r[";
-            for (int t=0; t < 20; ++t) {
-              const int progress = 20.0*counter/total;
-              if (t < progress)
-                cerr << "=";
-              else if (t == progress)
-                cerr << ">";
-              else
-                cerr << " ";
+          if (VERBOSE && counter % 200 == 0) {
+#pragma omp critical (progress1)
+            {
+              cerr << "\r[";
+              for (int t=0; t < 20; ++t) {
+                const int progress = 20.0*counter/total;
+                if (t < progress)
+                  cerr << "=";
+                else if (t == progress)
+                  cerr << ">";
+                else
+                  cerr << " ";
+              }
+              const double perc = 100.0*counter/total;
+              cerr << "] " << std::fixed << std::setprecision(2) << perc << "%";
+              cerr.flush();
             }
-            const double perc = 100.0*counter/total;
-            cerr << "] " << std::fixed << std::setprecision(2) << perc << "%";
-            cerr.flush();
           }
-          out << "\t" << sc[i][j];
         }
-        else if (j==i)
-          out << "\tNA";
+      }
+    }
+#pragma omp barrier
+
+    if (VERBOSE)
+      cerr << endl << "[WRITING]" << endl;
+    for (size_t i = 0; i < seq_name.size(); ++i)
+      out << "\t" << seq_name[i];
+    out << endl;
+    for (size_t i = 0; i < seq_name.size(); ++i) {
+      out << seq_name[i];
+      for (size_t j = 0; j < seq_name.size(); ++j) {
+        if (j>i)
+          out << "\t" << sc[i][j];
         else
-          out << "\t" << sc[j][i];
+          out << "\tNA";
       }
       out << endl;
     }
-    if (VERBOSE) cerr << endl;
   }
   catch (const SMITHLABException &e) {
     cerr << e.what() << endl;

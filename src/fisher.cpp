@@ -24,10 +24,10 @@
 #include <fstream>
 #include <sstream>
 #include <random>
-//#include <gsl/gsl_randist.h>
 #include <unordered_map>
 #include <sys/types.h>
 #include <unistd.h>
+#include <omp.h>
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
@@ -50,11 +50,11 @@ typedef unordered_map<string, string> chrom_file_map;
 int
 main (int argc, const char **argv) {
   try {
+    size_t NUM_THREAD = 1;
     bool VERBOSE = false;
     bool DEBUG = false;
     string chrom_file, in_par, out_file;
     string fasta_suffix = "fa";
-    //size_t seed = time(0) * getpid();
 
     OptionParser opt_parse(strip_path(argv[0]), "Program for finding repeats.",
         "-c <fasta> <profile-HMM params file>");
@@ -64,6 +64,8 @@ main (int argc, const char **argv) {
       true, chrom_file);
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, out_file);
+    opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
+        Default: 1.", false, NUM_THREAD);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
@@ -81,6 +83,8 @@ main (int argc, const char **argv) {
       return EXIT_FAILURE;
     }
     in_par = leftover_args.front();
+    omp_set_dynamic(0);
+    omp_set_num_threads(NUM_THREAD);
 
     std::ofstream of;
     if (!out_file.empty()) of.open(out_file.c_str());
@@ -98,18 +102,28 @@ main (int argc, const char **argv) {
     read_fasta_file(chrom_file, copies, copy_seq);
     if (VERBOSE)
       cerr << "\tSEQUENCES FOUND=" << copies.size() << endl;
+    vector<vector<double> > scores(copies.size(), vector<double>());
+    size_t progress = 0;
+    const size_t TICK = NUM_THREAD*4+1>50 ? NUM_THREAD*4+1 : 50;
 
-    for (vector<string>::const_iterator i = copies.begin();
-        i < copies.end(); ++i) {
-      if (VERBOSE && (i-copies.begin()+1)%10==0)
-        cerr << "\tProcessed "
-          << 100*(i-copies.begin()+1)/copies.size() << "%" << endl;
-      const size_t index = i - copies.begin();
+#pragma omp parallel for
+    for (size_t i = 0;i < copies.size(); ++i) {
       vector<double> score;
-      hmm.FisherScoreVector(copy_seq[index], score);
-      out << *i << "\t" << copy_seq[index].size();
-      for (vector<double>::const_iterator j = score.begin();
-          j < score.end(); ++j)
+      hmm.FisherScoreVector(copy_seq[i], score);
+      scores[i] = score;
+#pragma omp atomic
+      ++progress;
+      if (VERBOSE && progress%TICK==0) {
+#pragma omp critical (progress)
+        cerr << "\tProcessed "
+          << 100*progress/copies.size() << "%" << endl;
+      }
+    }
+#pragma omp barrier
+    for (size_t i = 0; i < scores.size(); ++i) {
+      out << copies[i] << "\t" << copy_seq[i].size();
+      for (vector<double>::const_iterator j = scores[i].begin();
+          j < scores[i].end(); ++j)
         out << "\t" << *j;
       out << endl;
     }

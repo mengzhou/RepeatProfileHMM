@@ -10,7 +10,7 @@ endif
 PROGS = align
 
 CXX = g++
-CXXFLAGS = -Wall -fmessage-length=50 -std=c++11
+CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -fopenmp
 OPTFLAGS = -O2
 DEBUGFLAGS = -g
 
