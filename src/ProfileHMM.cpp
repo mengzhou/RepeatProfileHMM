@@ -1491,7 +1491,12 @@ ProfileHMM::FisherScoreVector(const string &sequence,
   backward_algorithm(false, false, sequence, backward);
   // model_len*4: all M states; +4: I_0
   score.resize(model_len*4+4, 0.0);
-  const double posterior_p = posterior_prob(forward);
+  //const double posterior_p = posterior_prob(forward);
+  vector<double> list;
+  for (size_t i = index_m(1); i < index_i(0)+1; ++i) {
+    list.push_back(forward.back()[i]);
+  }
+  const double posterior_p = smithlab::log_sum_log_vec(list, list.size());
 
   // scores for states M_1 to M_L, plus I_0
   for (size_t state_index = index_m(1); state_index < index_i(0)+1;
