@@ -24,6 +24,7 @@
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
+#include "GenomicRegion.hpp"
 
 using std::string;
 using std::vector;

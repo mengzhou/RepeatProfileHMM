@@ -46,7 +46,7 @@ install: $(PROGS)
 	@install -m 755 $(PROGS) $(PROGRAM_ROOT)/bin
 
 $(PROGS): $(addprefix $(SMITHLAB_CPP)/, smithlab_utils.o smithlab_os.o \
-	OptionParser.o)
+	OptionParser.o GenomicRegion.o)
 
 %.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $< $(INCLUDEARGS)
