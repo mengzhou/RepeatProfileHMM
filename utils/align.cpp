@@ -20,7 +20,9 @@
 #include <string>
 #include <fstream>
 #include <iomanip>
+#ifdef OPENMP
 #include <omp.h>
+#endif
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
@@ -67,7 +69,9 @@ main(int argc, const char **argv) {
     double GAP = 1.0;
     double MM = 1.0;
     bool VERBOSE = false;
+#ifdef OPENMP
     size_t NUM_THREAD = 1;
+#endif
     string in_file, out_file;
 
     OptionParser opt_parse(strip_path(argv[0]),
@@ -80,8 +84,10 @@ main(int argc, const char **argv) {
       false, GAP);
     opt_parse.add_opt("mismatch", 'm', "Penalty for mismatch. Default: 1.0",
       false, MM);
+#ifdef OPENMP
     opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
         Default: 1.", false, NUM_THREAD);
+#endif
     opt_parse.add_opt("verbose", 'v',
       "Verbose mode. Only use this for interactive enviroment.", false, VERBOSE);
 
@@ -112,22 +118,32 @@ main(int argc, const char **argv) {
       throw SMITHLABException("could not find any sequence in: "
           + in_file);
 
+#ifdef OPENMP
     omp_set_dynamic(0);
     omp_set_num_threads(NUM_THREAD);
+#endif
 
     const size_t total = seq_name.size()*(seq_name.size()-1)/2;
     vector<vector<double> > sc(seq_name.size(), vector<double>(seq_name.size(), 0.0));
     size_t counter = 0;
+#ifdef OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < seq_seq.size(); ++i) {
+#ifdef OPENMP
 #pragma omp parallel for
+#endif
       for (size_t j = 0; j < seq_seq.size(); ++j) {
         if (j>i) {
           sc[i][j] = g_align_hamming(seq_seq[i], seq_seq[j], GAP, MM);
+#ifdef OPENMP
 #pragma omp atomic
+#endif
           ++counter;
           if (VERBOSE && counter % 200 == 0) {
+#ifdef OPENMP
 #pragma omp critical (progress1)
+#endif
             {
               cerr << "\r[";
               for (int t=0; t < 20; ++t) {
@@ -147,7 +163,9 @@ main(int argc, const char **argv) {
         }
       }
     }
+#ifdef OPENMP
 #pragma omp barrier
+#endif
 
     if (VERBOSE)
       cerr << endl << "[WRITING]" << endl;

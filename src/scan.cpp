@@ -27,7 +27,9 @@
 #include <unordered_map>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef OPENMP
 #include <omp.h>
+#endif
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
@@ -226,8 +228,10 @@ main (int argc, const char **argv) {
       "Z-score cutoff for occurrence identifiation. Default: 1.0;\
         setting to 0 will disable this functionality.",
       false, Z_CUTOFF);
+#ifdef OPENMP
     opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
         Default: 1.", false, NUM_THREAD);
+#endif
     opt_parse.add_opt("bits", 'b', "Use state bits instead of CIGAR.",
       false, USE_BITS);
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
@@ -250,8 +254,10 @@ main (int argc, const char **argv) {
       return EXIT_FAILURE;
     }
     in_par = leftover_args.front();
+#ifdef OPENMP
     omp_set_dynamic(0);
     omp_set_num_threads(NUM_THREAD);
+#endif
 
     std::ofstream of;
     if (!out_file.empty()) of.open(out_file.c_str());
@@ -283,46 +289,68 @@ main (int argc, const char **argv) {
     vector<string> state_bits;
     size_t progress = 0;
     const size_t TICK = NUM_THREAD*4+1>50 ? NUM_THREAD*4+1 : 50;
+#ifdef OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < chr_seq.size(); ++i) {
       vector<size_t> states;
       if (DEBUG) {
+#ifdef OPENMP
 #pragma omp critical (debug_info)
+#endif
         cerr << chr_name[i] << endl;
       }
       hmm.PosteriorDecoding(false, DEBUG, !NO_LOG_ODDS, chr_seq[i], states);
+#ifdef OPENMP
 #pragma omp atomic
+#endif
       ++progress;
+#ifdef OPENMP
 #pragma omp critical (update_results1)
+#endif
       {
       identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
         chr_name[i], true, NO_LOG_ODDS, USE_BITS, coordinates, state_bits);
       }
       if (VERBOSE && progress % TICK == 0) {
+#ifdef OPENMP
 #pragma omp critical (progress1)
+#endif
         cerr << "\r\tPROCESSED " << 100*progress/chr_seq.size()/2 << "%";
       }
     }
+#ifdef OPENMP
 #pragma omp barrier
+#endif
     hmm.ComplementBackground();
+#ifdef OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0; i < chr_seq.size(); ++i) {
       revcomp_inplace(chr_seq[i]);
       vector<size_t> states;
       hmm.PosteriorDecoding(false, false, !NO_LOG_ODDS, chr_seq[i], states);
+#ifdef OPENMP
 #pragma omp atomic
+#endif
       ++progress;
+#ifdef OPENMP
 #pragma omp critical (update_results2)
+#endif
       {
       identify_repeats(hmm, hmm.Length()+1, 1, chr_seq[i], states,
         chr_name[i], false, NO_LOG_ODDS, USE_BITS, coordinates, state_bits);
       }
       if (VERBOSE && progress % TICK == 0) {
+#ifdef OPENMP
 #pragma omp critical (progress2)
+#endif
         cerr << "\r\tPROCESSED " << 100*progress/chr_seq.size()/2 << "%";
       }
     }
+#ifdef OPENMP
 #pragma omp barrier
+#endif
     if (Z_CUTOFF - 0.0 > 1e-10) {
       if (VERBOSE)
         cerr << endl << "[CALCULATING Z-SCORES]" << endl;

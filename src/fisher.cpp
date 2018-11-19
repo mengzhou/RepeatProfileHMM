@@ -27,7 +27,9 @@
 #include <unordered_map>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef OPENMP
 #include <omp.h>
+#endif
 
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
@@ -64,8 +66,10 @@ main (int argc, const char **argv) {
       true, chrom_file);
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, out_file);
+#ifdef OPENMP
     opt_parse.add_opt("process", 'p', "Set the number of processes for parallelization. \
         Default: 1.", false, NUM_THREAD);
+#endif
     opt_parse.add_opt("verbose", 'v', "Verbose mode.", false, VERBOSE);
     opt_parse.add_opt("debug", 'd', "Print debug information.", false, DEBUG);
 
@@ -83,8 +87,10 @@ main (int argc, const char **argv) {
       return EXIT_FAILURE;
     }
     in_par = leftover_args.front();
+#ifdef OPENMP
     omp_set_dynamic(0);
     omp_set_num_threads(NUM_THREAD);
+#endif
 
     std::ofstream of;
     if (!out_file.empty()) of.open(out_file.c_str());
@@ -106,20 +112,28 @@ main (int argc, const char **argv) {
     size_t progress = 0;
     const size_t TICK = NUM_THREAD*4+1>50 ? NUM_THREAD*4+1 : 50;
 
+#ifdef OPENMP
 #pragma omp parallel for
+#endif
     for (size_t i = 0;i < copies.size(); ++i) {
       vector<double> score;
       hmm.FisherScoreVector(copy_seq[i], score);
       scores[i] = score;
+#ifdef OPENMP
 #pragma omp atomic
+#endif
       ++progress;
       if (VERBOSE && progress%TICK==0) {
+#ifdef OPENMP
 #pragma omp critical (progress)
+#endif
         cerr << "\tProcessed "
           << 100*progress/copies.size() << "%" << endl;
       }
     }
+#ifdef OPENMP
 #pragma omp barrier
+#endif
     for (size_t i = 0; i < scores.size(); ++i) {
       out << copies[i] << "\t" << copy_seq[i].size();
       for (vector<double>::const_iterator j = scores[i].begin();

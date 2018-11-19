@@ -7,10 +7,10 @@ all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
 endif
 
-PROGS = test construct scan multiscan fisher fit
+PROGS = construct scan fisher
 
 CXX = g++
-CXXFLAGS = -Wall -fmessage-length=50 -std=c++11 -fopenmp
+CXXFLAGS = -Wall -fmessage-length=50 -std=c++11
 OPTFLAGS = -O2
 DEBUGFLAGS = -g
 
@@ -28,15 +28,13 @@ INCLUDEARGS = $(addprefix -I,$(INCLUDEDIRS))
 
 LIBS = -lgsl -lgslcblas
 
-# Flags for Mavericks
+# Flags for Mac
 ifeq "$(shell uname)" "Darwin"
 CXXFLAGS += -arch x86_64
 INCLUDEARGS += -I/usr/local/include
 LIBS += -L/usr/local/lib
-#ifeq "$(shell if [ `sysctl -n kern.osrelease | cut -d . -f 1` -ge 13 ];\
-#              then echo 'true'; fi)" "true"
-#CXXFLAGS += -stdlib=libstdc++
-#endif
+else
+CXXFLAGS += -fopenmp -DOPENMP
 endif
 
 all: $(PROGS)
