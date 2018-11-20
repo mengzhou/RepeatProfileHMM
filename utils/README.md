@@ -1,4 +1,4 @@
-* align
+## align
 This program generates global alignment of DNA sequences and report
 the Hamming distance(s) between each pair of sequences.
 

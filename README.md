@@ -113,4 +113,5 @@ the Fisher score vector. This includes (model length + 1) numbers, including
 all match states and the background state, I_0. These values are not in log
 scale.
 
-[1] http://web.mit.edu/meme_v4.9.0/doc/clustalw-format.html
+# Reference
+[1]:http://web.mit.edu/meme_v4.9.0/doc/clustalw-format.html

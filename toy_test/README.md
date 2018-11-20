@@ -1,3 +1,7 @@
+# Toy test example
+This directory includes a toy example for demonstrating the programs of
+`RepeatProfileHMM`. Below is a list of files in this example:
+
 *  consensus.fa : the sequences of repeats inserted into the genome.
 
 * `chrF.fa`: a fake chromosome with 100 simulated repeat insertions.

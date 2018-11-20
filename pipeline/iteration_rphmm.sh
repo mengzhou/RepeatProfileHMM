@@ -1,18 +1,9 @@
 #!/bin/bash
-# TO-DO: deambiguity_GT.bed needs to be changed to something more general
-NHMMER=~mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/scan/model_construction/hmmer/nhmmer
-MUSCLE=~mengzhou/panfs/tools/muscle3.8.31_i86linux64
-ESL=~mengzhou/panfs/tools/hmmer-3.1b1/binaries/esl-reformat
-BUILD=~mengzhou/panfs/tools/hmmer-3.1b1/binaries/hmmbuild
-RPHMM=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/bin
-NUMBER=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/pipeline/get_number.sh
-NTHREAD=16
-
-#GENOME=/home/rcf-40/mengzhou/panfs/repeats/ms1509/ms1509.fa
-#GENOME=/home/rcf-40/mengzhou/panfs/repeats/mm10/RepeatMasker/L1Base/mm10.fa
+# Set the below to RepeatProfileHMM *root* directory
+RPHMM=/home/rcf-40/mengzhou/panfs/repeats/RepeatProfileHMM/
+source ${RPHMM}/pipeline/config.sh
 RAND=500
 MAX_ITR=9
-JACCARD=0
 
 function float_lt () {
   echo $1"<"$2 | bc -l
@@ -33,28 +24,27 @@ function prep_seq() {
       score=-log($8)/$5; if($5<=LEN+EXT && $5>=LEN-EXT)\
       {print $1, $2, $3, $4"|"$1":"$2"-"$3"|"$6, score, $6}}' | sort -k5,5gr > $TEMP
   TOTAL=$(cat $TEMP | wc -l)
-  echo $TOTAL
   # keep the first 1/3 scoring hits for random sampling
   cat $TEMP | sort -k5,5gr | awk -v t=$TOTAL 'BEGIN{OFS="\t"; srand()}NR<=t/1.5\
       {print rand(), $0}' | sort -k1,1g | cut -f 2- | awk -v s=$4 'NR<=s' | \
     sort -k1,1 -k2,2n -k3,3n > $REG
   rm $TEMP
-  bedtools getfasta -fi $6 -s -name -bed $REG -fo ${3}.fa
+  $BEDTOOLS/bedtools getfasta -fi $6 -s -name -bed $REG -fo ${3}.fa
   cat $1 >> ${3}.fa
 }
 
 function muscle() {
   echo "[ALIGNING]"
   $MUSCLE -in $1 -clw -quiet > ${1%.*}.aln
-  $ESL stockholm ${1%.*}.aln | sed 's/consensus/#=GC RF/' > ${1%.*}.sto
+  $HMMER/esl-reformat stockholm ${1%.*}.aln | sed 's/consensus/#=GC RF/' > ${1%.*}.sto
 }
 
 function build_nhmmer() {
-  $BUILD --hand --dna --plaplace --wnone --enone ${1%.*}.hmm $1
+  $HMMER/hmmbuild --hand --dna --plaplace --wnone --enone ${1%.*}.hmm $1
 }
 
 function build_rphmm() {
-  $RPHMM/construct -n -m -o ${1%.*}.params $1
+  $RPHMM/bin/construct -n -m -o ${1%.*}.params $1
 }
 
 function scan_nhmmer() {
@@ -62,7 +52,7 @@ function scan_nhmmer() {
   # $2: reference genome FASTA
   # $3: output BED name
   # $4: (optional) filtering region for removing ambiguity in F type monomer detection
-  $NHMMER -o /dev/null --cpu 16 --dna --dfamtblout ${3%.*}.out --max --cut_ga $1 $2
+  $HMMER/nhmmer -o /dev/null --cpu $NTHREAD --dna --dfamtblout ${3%.*}.out --max --cut_ga $1 $2
   awk 'BEGIN{OFS="\t"}$1!~/#/{if($9=="+"){start=$10-1; end=$11;}\
       else{start=$11-1; end=$10} len=end-start; score=-log($5)/len;\
       if(score >= .2)print $1, start, end, $3, end-start, $9, $4, $5}' ${3%.*}.out | \
@@ -70,66 +60,78 @@ function scan_nhmmer() {
   if [ $4 ]
   then
     mv $3 ${3}.all
-    intersectBed -a ${3}.all -b $4 -v > $3
+    $BEDTOOLS/intersectBed -a ${3}.all -b $4 -v > $3
   fi
 }
 
 function scan_rphmm() {
   # $1: profile-HMM
-  # $2: reference genome FA
+  # $2: input FA
   # $3: output BED
-  $RPHMM/scan -v -p $NTHREAD -c $2 $1 | awk '$6=="+"' | \
+  $RPHMM/bin/scan -v -p $NTHREAD -c $2 $1 | awk '$6=="+"' | \
     sort -k1,1 -k2,2n -k3,3n > ${3%.*}.out
   awk 'BEGIN{OFS="\t"}{split($1, f, "|"); split(f[2], ff, "[:-]");\
       chr=ff[1]; start=ff[2]; end=ff[3];\
-      if(length(f)==2){strand=$6; print chr, start+$2, start+$3, $1, $3-$2, strand, $7}\
-      else{strand=f[3];if(strand=="+"){print chr, start+$2, start+$3, $1, $3-$2, strand, $7}\
-      else{print chr, end-$3, end-$2, $1, $3-$2, strand, $7}}}' ${3%.*}.out | \
-    sort -k1,1 -k2,2n -k3,3n > $3
+      if(length(f)==2){strand=$6; print chr, start+$2, start+$3, $1, $3-$2, \
+        strand, $7}else{strand=f[3];if(strand=="+"){print chr, start+$2, \
+        start+$3, $1, $3-$2, strand, $7}else{print chr, end-$3, end-$2, $1, \
+        $3-$2, strand, $7}}}' ${3%.*}.out | sort -k1,1 -k2,2n -k3,3n > $3
 }
 
 function number_monomers() {
-  # $1: scan result .bed
-  NAME=${1%%.*}
-  cp ${1%.*}.out ${NAME}.final.out
-  $NUMBER ${NAME}.final.out
+  # $1: scan result
+  cp ${1%.*}.out ${1%%.*}.final.out
+  IN=${1%%.*}.final.out
+  cat $IN | awk 'BEGIN{OFS="\t"}{split($1, f, "|"); split(f[2], ff, "[:-]");\
+      chr=ff[1]; start=ff[2]; end=ff[3];\
+      if(length(f)==2){strand=$6; print chr, start+$2, start+$3, $1, $3-$2, \
+        strand, $7}else{strand=f[3];if(strand=="+"){print chr, start+$2, \
+        start+$3, $1, $3-$2, strand, $7}else{print chr, end-$3, end-$2, $1, \
+        $3-$2, strand, $7}}}' | sort -k1,1 -k2,2n -k3,3n -k4,4 > ${IN%.*}.data
+  cat ${IN%.*}.data | awk '$6=="+"' | sort -k4,4 -k1,1 -k2,2n -k3,3n | \
+    awk -v chr="%" -f $NUMBERING > ${IN%.*}.pos.5p
+  cat ${IN%.*}.data | awk '$6=="-"' | sort -k4,4 -k1,1 -k3,3nr -k2,2nr | \
+    awk -v chr="%" -f $NUMBERING > ${IN%.*}.neg.5p
+  cat ${IN%.*}.pos.5p | sort -k4,4 -k1,1 -k3,3nr -k2,2nr | \
+    awk -v chr="#" -f $NUMBERING > ${IN%.*}.pos.3p
+  cat ${IN%.*}.neg.5p | sort -k4,4 -k1,1 -k2,2n -k3,3n | awk '$6=="-"' | \
+    awk -v chr="#" -f $NUMBERING > ${IN%.*}.neg.3p
+  cat ${IN%.*}.???.3p | awk 'BEGIN{OFS="\t"}{print $1, $2, $3, $4"|"$8, \
+    $5, $6, $7}' | sort -k1,1 -k2,2n -k3,3n > ${IN%.*}.bed
+  
+  rm ${IN%.*}.data ${IN%.*}.???.?p
 }
 
-if [ $# -lt 4 ]
+if [ $# -lt 3 ]
 then
-  echo "Usage: $0 <CONSENSUS.FA> <HMMER_OUTPUT_BED> <SEQ_OF_ROI> <REF GENOME>"
+  echo "Usage: $0 <consensus.fa> <nhmmer output in BED format> <FASTA of extended promoter sequecnes>"
   exit
 else
   export -f scan_rphmm
   LEN=$(tail -n +2 $1 | awk '{print length($1)}')
 
   PREV_OUT=$2
-  REF=$3
+  SEQ=$3
   ITR=1
+  JACCARD=0
   CONVERGE=$(float_lt $JACCARD 0.99)
   while [ \( $ITR -le $MAX_ITR \) -a $CONVERGE -eq 1 ]
   do
     echo "[ITERATION $ITR]"
     NAME=${PREV_OUT%%.*}.${ITR}.20bp.rand${RAND}
     CURR_OUT=${NAME}.scan.bed
-    prep_seq $1 $PREV_OUT $NAME $RAND $LEN $4
+    prep_seq $1 $PREV_OUT $NAME $RAND $LEN $REF
     muscle ${NAME}.fa
 
-    #nhmmer
-    #build_nhmmer ${NAME}.sto
-    #echo "[SCANNING]"
-    #scan_nhmmer ${NAME}.hmm $4 $CURR_OUT
-
-    #rphmm
     echo "[BUILDING]"
     build_rphmm ${NAME}.aln
     echo "[SCANNING]"
-    scan_rphmm ${NAME}.params $REF $CURR_OUT
+    scan_rphmm ${NAME}.params $SEQ $CURR_OUT
 
-    INTER=$(intersectBed -a $PREV_OUT -b $CURR_OUT | sort -k1,1 -k2,2n -k3,3n | mergeBed\
-      | awk 'BEGIN{t=0}{t+=$3-$2}END{print t}')
+    INTER=$($BEDTOOLS/intersectBed -a $PREV_OUT -b $CURR_OUT | sort -k1,1 \
+      -k2,2n -k3,3n | $BEDTOOLS/mergeBed| awk 'BEGIN{t=0}{t+=$3-$2}END{print t}')
     UNION=$(cat $PREV_OUT $CURR_OUT | cut -f 1-3 | sort -k1,1 -k2,2n -k3,3n | \
-      mergeBed | awk 'BEGIN{t=0}{t+=$3-$2}END{print t}')
+      $BEDTOOLS/mergeBed | awk 'BEGIN{t=0}{t+=$3-$2}END{print t}')
     JACCARD=$(echo "$INTER / $UNION" | bc -l)
     echo "[JACCARD=$JACCARD]"
     CONVERGE=$(float_lt $JACCARD 0.95)
@@ -138,4 +140,5 @@ else
     echo ""
   done
   number_monomers $CURR_OUT
+  cp ${NAME}.params ${NAME%%.*}.final.params
 fi
