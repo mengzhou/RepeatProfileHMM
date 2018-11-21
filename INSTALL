@@ -1,0 +1,33 @@
+Prerequisites
+==================================================
+* A compiler supporting C++11
+  The latest version of GCC is recommended. You can find related information
+  from
+  https://gcc.gnu.org/
+
+* GSL
+  A functioning installation of the GNU Scientific Library (GSL) is requried.
+  If you don't already have this installed, you will need to download and
+  install it from
+  http://www.gnu.org/software/gsl/
+
+* OpenMP (optional)
+  If OpenMP is installed, the parallization functionality can be enabled.
+  For Linux users, you can find the installation instructions of OpenMP at
+  https://www.openmp.org/
+  Note that OpenMP is not available for Mac OS.
+
+Installation instructions
+==================================================
+To build the binaries, type the following, where '>' is your prompt and the
+CWD is the root of the distribution:
+
+  > make all
+
+To install the binaries, type the following, where '>' is your prompt and the
+CWD is the root of the distribution:
+
+  > make install
+
+This will place the binaries in the bin directory under the package root.
+They can be used directly from there without any additional steps.
