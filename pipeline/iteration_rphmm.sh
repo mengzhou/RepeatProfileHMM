@@ -104,7 +104,7 @@ function number_monomers() {
 
 if [ $# -lt 3 ]
 then
-  echo "Usage: $0 <consensus.fa> <nhmmer output in BED format> <FASTA of extended promoter sequecnes>"
+  echo "Usage: $0 <consensus.fa> <nhmmer output in BED format> <FASTA of extended promoter sequences>"
   exit
 else
   export -f scan_rphmm
