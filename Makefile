@@ -21,6 +21,7 @@
 
 PROGRAM_ROOT = $(shell pwd)
 app_subdirs = src utils
+all_subdirs = src utils smithlab_cpp
 
 all:
 	@for i in $(app_subdirs); do\
@@ -33,8 +34,8 @@ install:
 	 done;
 
 clean:
-	@for i in $(app_subdirs); do\
-	  make -C src PROGRAM_ROOT=$(PROGRAM_ROOT) clean; \
+	@for i in $(all_subdirs); do\
+	  make -C $$i PROGRAM_ROOT=$(PROGRAM_ROOT) clean; \
 	 done;
 .PHONY: clean
 
