@@ -25,9 +25,28 @@ monomers.
 # Instructions
 1. Make sure all the above dependencies have been installed.
 
-2. Change the variables in `config.sh accordingly to your environment.
+2. Change the variables in `config.sh` accordingly to your environment.
 Note that some variables correspond to *executable programs themselves*,
 but others correspond to *directories* which includes multiple programs.
+Also you need to properly set the path in both `model_construct.sh` and
+`iteration_rphmm.sh`.
+
+4. If you used `nhmmer` for the initial detection of monomers, you need
+to reformat the output of `nhmmer` to BED format. For example, below is
+the command which was used for the monomer detection in mm10 genome:
+```
+nhmmer --dna --dfamtblout <nhmmer_out> --max --cut_ga <monomer.hmm> mm10.fa
+```
+Here the output format is set to the Dfam tabulated format. To convert this
+format to BED, you can use the following `awk` command:
+```
+awk 'BEGIN{OFS="\t"}$1!~/#/{if($9=="+"){start=$10-1; end=$11;}
+  else{start=$11-1; end=$10} if($4 >= 60)print $1, start, end, $3, end-start,
+  $9, $4, $5}' <nhmmer_out> | sort -k1,1 -k2,2n -k3,3n > <nhmmer_bed>
+```
+Replace `<nhmmer_out>` and `<nhmmer_bed>` to corresponding file names.
+Note here we applied a filter of minimum bit socre of 60, to remove potential
+noise.
 
 3. Run `model_construct.sh` to get an initial profile-HMM. It takes 3
 parameters:

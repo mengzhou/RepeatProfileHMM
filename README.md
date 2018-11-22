@@ -1,6 +1,7 @@
 # RepeatProfileHMM
 
-A profile-HMM package designed for repeat identification and classification.
+A profile-HMM package designed for repeat identification. Please see
+INSTALL for installation instructions.
 
 # Usage
 ## `construct`
@@ -114,4 +115,4 @@ all match states and the background state, I_0. These values are not in log
 scale.
 
 # Reference
-[1]:http://web.mit.edu/meme_v4.9.0/doc/clustalw-format.html
+[1]: http://web.mit.edu/meme_v4.11.4/share/doc/clustalw-format.html
